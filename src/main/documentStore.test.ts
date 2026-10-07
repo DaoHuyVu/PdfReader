@@ -135,6 +135,12 @@ describe('DocumentStore', () => {
     expect(loaded.pageCount).toBe(2)
     expect((await readdir(dir)).sort()).toEqual([`${FP}-LAPTOP.json`, `${FP}.json`])
   })
+
+  it('rejects a value that is not a Fingerprint', async () => {
+    await expect(store.load('..\\..\\evil')).rejects.toThrow(/Invalid fingerprint/)
+    await expect(store.update('ABC', (d) => d)).rejects.toThrow(/Invalid fingerprint/)
+    expect(await readdir(dir).catch(() => [])).toEqual([])
+  })
 })
 
 describe('withRetry', () => {

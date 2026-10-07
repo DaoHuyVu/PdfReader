@@ -1,10 +1,12 @@
-import type { DocumentData, Fingerprint, ReadingPosition } from './documentData'
+import type { DocumentData, Fingerprint, Highlight, ReadingPosition } from './documentData'
 
 export const IPC = {
   getContext: 'window:get-context',
   readDocumentBytes: 'document:read-bytes',
   loadDocumentData: 'document:load-data',
   reportReadingPosition: 'document:report-reading-position',
+  saveHighlight: 'document:save-highlight',
+  deleteHighlight: 'document:delete-highlight',
   openFileDialog: 'app:open-file-dialog',
   openPath: 'app:open-path',
   listRecent: 'app:list-recent'
@@ -30,6 +32,8 @@ export interface PdfReaderApi {
   readDocumentBytes(): Promise<Uint8Array>
   loadDocumentData(): Promise<DocumentData>
   reportReadingPosition(reading: ReadingPosition, pageCount: number): void
+  saveHighlight(highlight: Highlight): Promise<void>
+  deleteHighlight(id: string): Promise<void>
   openFileDialog(): Promise<void>
   openPath(path: string): Promise<OpenResult>
   listRecent(): Promise<RecentView[]>

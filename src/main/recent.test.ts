@@ -2,7 +2,7 @@ import { mkdtemp, readdir, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { addRecent, RecentStore, type RecentEntry } from './recent'
+import { addRecent, findCarryOverSource, RecentStore, type RecentEntry } from './recent'
 
 function entry(fingerprint: string, path: string, openedAt = 1): RecentEntry {
   return { fingerprint, path, openedAt }
@@ -76,5 +76,20 @@ describe('RecentStore', () => {
     expect(list).toHaveLength(10)
     const names = await readdir(dir)
     expect(names.some((n) => n.includes('.tmp'))).toBe(false)
+  })
+})
+
+describe('findCarryOverSource', () => {
+  const OLD = 'a'.repeat(64)
+  const NEW = 'b'.repeat(64)
+
+  it('finds an entry with the same path (any case) and a different Fingerprint', () => {
+    const entries = [entry(OLD, 'D:\\Books\\Contract.pdf')]
+    expect(findCarryOverSource(entries, 'd:\\books\\contract.pdf', NEW)).toEqual(entries[0])
+  })
+
+  it('ignores the same Fingerprint and other paths', () => {
+    expect(findCarryOverSource([entry(NEW, 'D:\\a.pdf')], 'D:\\a.pdf', NEW)).toBeNull()
+    expect(findCarryOverSource([entry(OLD, 'D:\\b.pdf')], 'D:\\a.pdf', NEW)).toBeNull()
   })
 })

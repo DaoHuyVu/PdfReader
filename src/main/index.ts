@@ -1,7 +1,16 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { access, readFile } from 'fs/promises'
 import { basename, join } from 'path'
-import { newerReading, readingProgress, type ReadingPosition } from '../shared/documentData'
+import {
+  carryOver,
+  hasCarryableContent,
+  isHighlight,
+  isReadingPosition,
+  newerReading,
+  readingProgress,
+  removeHighlight,
+  upsertHighlight
+} from '../shared/documentData'
 import { IPC, type DocumentContext, type OpenResult, type RecentView } from '../shared/ipc'
 import { t } from '../shared/strings'
 import { findPdfArg } from './argv'
@@ -9,7 +18,7 @@ import { documentsDir, resolveDataFolder } from './dataFolder'
 import { DocumentStore } from './documentStore'
 import { computeFingerprint } from './fingerprint'
 import { PositionSaver } from './positionSaver'
-import { RecentStore } from './recent'
+import { findCarryOverSource, RecentStore } from './recent'
 import { AppWindows } from './windows'
 
 const windows = new AppWindows()
@@ -23,32 +32,80 @@ function logSaveError(err: unknown): void {
   console.error('Failed to save reading position', err)
 }
 
+// Opens in progress, by Fingerprint, so two quick opens of the same file share one window and one Carry Over prompt.
+const pendingOpens = new Map<string, Promise<OpenResult>>()
+
 async function openPath(path: string): Promise<OpenResult> {
-  if (!path.toLowerCase().endsWith('.pdf')) return { ok: false, reason: 'not-pdf' }
+  if (typeof path !== 'string' || !path.toLowerCase().endsWith('.pdf')) return { ok: false, reason: 'not-pdf' }
   try {
     await access(path)
   } catch {
     return { ok: false, reason: 'missing' }
   }
+  let fingerprint: string
   try {
-    const fingerprint = await computeFingerprint(path)
-    if (!windows.focusDocument(fingerprint)) {
-      windows.openDocument(
-        { kind: 'document', path, fileName: basename(path), fingerprint },
-        {
-          onBlur: () => void saver.flush(fingerprint).catch(logSaveError),
-          onClosed: () => void saver.flush(fingerprint).catch(logSaveError)
-        }
-      )
-    }
-    try {
-      await recent.add({ fingerprint, path, openedAt: Date.now() })
-    } catch (err) {
-      console.error('Failed to update recent documents', err)
-    }
-    return { ok: true }
+    fingerprint = await computeFingerprint(path)
   } catch (err) {
     return { ok: false, reason: 'error', message: err instanceof Error ? err.message : String(err) }
+  }
+  if (windows.focusDocument(fingerprint)) {
+    await recordRecent(fingerprint, path)
+    return { ok: true }
+  }
+  const pending = pendingOpens.get(fingerprint)
+  if (pending) return pending
+  const opening = openNewDocument(path, fingerprint).finally(() => pendingOpens.delete(fingerprint))
+  pendingOpens.set(fingerprint, opening)
+  return opening
+}
+
+async function openNewDocument(path: string, fingerprint: string): Promise<OpenResult> {
+  await offerCarryOver(path, fingerprint)
+  if (!windows.focusDocument(fingerprint)) {
+    windows.openDocument(
+      { kind: 'document', path, fileName: basename(path), fingerprint },
+      {
+        onBlur: () => void saver.flush(fingerprint).catch(logSaveError),
+        onClosed: () => void saver.flush(fingerprint).catch(logSaveError)
+      }
+    )
+  }
+  await recordRecent(fingerprint, path)
+  return { ok: true }
+}
+
+async function recordRecent(fingerprint: string, path: string): Promise<void> {
+  try {
+    await recent.add({ fingerprint, path, openedAt: Date.now() })
+  } catch (err) {
+    console.error('Failed to update recent documents', err)
+  }
+}
+
+/**
+ * Carry Over: when this path was last opened with a different Fingerprint (the file changed),
+ * and the old data has a position or Highlights while the new data has neither, ask the user
+ * whether to copy them over. Never throws; a failure only skips the offer.
+ */
+async function offerCarryOver(path: string, fingerprint: string): Promise<void> {
+  try {
+    const source = findCarryOverSource(await recent.list(), path, fingerprint)
+    if (!source) return
+    const [previous, current] = await Promise.all([store.load(source.fingerprint), store.load(fingerprint)])
+    if (!hasCarryableContent(previous) || hasCarryableContent(current)) return
+    const { response } = await dialog.showMessageBox({
+      type: 'question',
+      title: t.carryOver.title,
+      message: t.carryOver.message(basename(path)),
+      detail: t.carryOver.detail(previous.highlights.length),
+      buttons: [t.carryOver.yes, t.carryOver.no],
+      defaultId: 0,
+      cancelId: 1
+    })
+    if (response !== 0) return
+    await store.update(fingerprint, (data) => carryOver(previous, data, Date.now()))
+  } catch (err) {
+    console.error('Failed to carry over document data', err)
   }
 }
 
@@ -104,14 +161,24 @@ function registerIpc(): void {
   ipcMain.handle(IPC.getContext, (event) => windows.contextFor(event.sender.id) ?? { kind: 'home' })
   ipcMain.handle(IPC.readDocumentBytes, (event) => readFile(requireDocument(event).path))
   ipcMain.handle(IPC.loadDocumentData, (event) => store.load(requireDocument(event).fingerprint))
-  ipcMain.on(IPC.reportReadingPosition, (event, reading: ReadingPosition, pageCount: number) => {
+  ipcMain.on(IPC.reportReadingPosition, (event, reading: unknown, pageCount: unknown) => {
     const context = documentOf(event)
-    if (!context) return
-    saver.report(context.fingerprint, { reading, pageCount })
+    if (!context || !isReadingPosition(reading) || !Number.isInteger(pageCount) || (pageCount as number) < 0) return
+    saver.report(context.fingerprint, { reading, pageCount: pageCount as number })
     const win = BrowserWindow.fromWebContents(event.sender)
     if (!win || win.isDestroyed() || !win.isFocused()) {
       void saver.flush(context.fingerprint).catch(logSaveError)
     }
+  })
+  ipcMain.handle(IPC.saveHighlight, async (event, highlight: unknown) => {
+    const { fingerprint } = requireDocument(event)
+    if (!isHighlight(highlight)) throw new Error('Invalid highlight')
+    await store.update(fingerprint, (data) => upsertHighlight(data, highlight))
+  })
+  ipcMain.handle(IPC.deleteHighlight, async (event, id: unknown) => {
+    const { fingerprint } = requireDocument(event)
+    if (typeof id !== 'string' || id === '') throw new Error('Invalid highlight id')
+    await store.update(fingerprint, (data) => removeHighlight(data, id, Date.now()))
   })
   ipcMain.handle(IPC.openFileDialog, () => showOpenDialog())
   ipcMain.handle(IPC.openPath, (_event, path: string) => openPath(path))

@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, rename, unlink, writeFile } from 'fs/promises
 import { join } from 'path'
 import {
   emptyDocumentData,
+  isFingerprint,
   mergeDocumentData,
   parseDocumentData,
   type DocumentData,
@@ -49,10 +50,12 @@ export class DocumentStore {
   ) {}
 
   load(fingerprint: Fingerprint): Promise<DocumentData> {
+    if (!isFingerprint(fingerprint)) return Promise.reject(new Error(`Invalid fingerprint: ${String(fingerprint)}`))
     return this.enqueue(fingerprint, () => this.loadUnlocked(fingerprint))
   }
 
   update(fingerprint: Fingerprint, mutate: (data: DocumentData) => DocumentData): Promise<DocumentData> {
+    if (!isFingerprint(fingerprint)) return Promise.reject(new Error(`Invalid fingerprint: ${String(fingerprint)}`))
     return this.enqueue(fingerprint, async () => {
       const next = mutate(await this.loadUnlocked(fingerprint))
       await this.writeAtomic(fingerprint, next)

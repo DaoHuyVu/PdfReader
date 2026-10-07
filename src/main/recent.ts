@@ -58,3 +58,12 @@ export class RecentStore {
     await rename(tempPath, this.filePath)
   }
 }
+
+/**
+ * The Recent entry for the same path but a different Fingerprint: the file changed since it was
+ * last opened here, so its old data can be offered for Carry Over.
+ */
+export function findCarryOverSource(entries: RecentEntry[], path: string, fingerprint: Fingerprint): RecentEntry | null {
+  const target = path.toLowerCase()
+  return entries.find((e) => e.path.toLowerCase() === target && e.fingerprint !== fingerprint) ?? null
+}
