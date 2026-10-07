@@ -19,6 +19,7 @@ import { highlightScrollTop, highlightsByPage } from './highlights/geometry'
 import { HighlightLayer } from './highlights/HighlightLayer'
 import { HighlightMenu } from './highlights/HighlightMenu'
 import { HighlightPanel } from './highlights/HighlightPanel'
+import { reanchorHighlight } from './highlights/reanchor'
 import { hitTestHighlight, isEditableTarget, readSelection, type PendingSelection } from './highlights/selection'
 import { SelectionToolbar } from './highlights/SelectionToolbar'
 import { useHighlights } from './highlights/useHighlights'
@@ -34,7 +35,7 @@ import {
   visiblePageRange,
   type PagePosition
 } from './layout'
-import { loadPdf, type LoadedPdf } from './pdf'
+import { getDocumentTextIndex, loadPdf, type LoadedPdf } from './pdf'
 import { PdfPage } from './PdfPage'
 import { createThrottle } from './throttle'
 
@@ -109,6 +110,23 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
   const [menu, setMenu] = useState<{ id: string; anchor: { x: number; y: number } } | null>(null)
   const menuHighlight = menu ? (highlights.find((h) => h.id === menu.id) ?? null) : null
   const closeMenu = useCallback(() => setMenu(null), [])
+
+  // Carried Highlights came from an earlier version of this file; find their text again.
+  useEffect(() => {
+    const carried = initialHighlights.filter((h) => h.status === 'carried')
+    if (carried.length === 0) return
+    let cancelled = false
+    getDocumentTextIndex(pdf.doc)
+      .then((index) => {
+        if (cancelled) return
+        const now = Date.now()
+        for (const highlight of carried) save(reanchorHighlight(index, highlight, now))
+      })
+      .catch((err) => console.error('Failed to re-anchor highlights', err))
+    return () => {
+      cancelled = true
+    }
+  }, [pdf.doc, initialHighlights, save])
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [focusedId, setFocusedId] = useState<string | null>(null)
