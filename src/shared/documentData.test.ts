@@ -275,6 +275,23 @@ describe('normalizeHighlight', () => {
     const h = { ...highlight('a'), status: 'carried' as const }
     expect(normalizeHighlight(h).status).toBe('carried')
   })
+
+  it('drops extra properties inside parts and rects', () => {
+    const h = {
+      ...highlight('a'),
+      parts: [
+        {
+          pageIndex: 0,
+          rects: [{ x: 0, y: 0, width: 10, height: 10, extra: 'nope' } as any],
+          extraPartProp: 'should-be-dropped'
+        } as any
+      ]
+    }
+    const normalized = normalizeHighlight(h)
+    expect(normalized).toEqual(highlight('a'))
+    expect(normalized.parts[0]).not.toHaveProperty('extraPartProp')
+    expect(normalized.parts[0].rects[0]).not.toHaveProperty('extra')
+  })
 })
 
 describe('upsertHighlight', () => {

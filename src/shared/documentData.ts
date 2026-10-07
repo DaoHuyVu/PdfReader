@@ -211,7 +211,10 @@ export function normalizeHighlight(highlight: Highlight): Highlight {
     color: highlight.color,
     note: highlight.note,
     text: highlight.text,
-    parts: highlight.parts,
+    parts: highlight.parts.map((p) => ({
+      pageIndex: p.pageIndex,
+      rects: p.rects.map(({ x, y, width, height }) => ({ x, y, width, height }))
+    })),
     createdAt: highlight.createdAt,
     updatedAt: highlight.updatedAt
   }

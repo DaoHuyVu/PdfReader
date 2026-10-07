@@ -110,8 +110,8 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
   const onHighlightError = useCallback(() => {
     const now = Date.now()
     if (now - lastAlertAtRef.current < ALERT_BURST_WINDOW_MS) return
-    lastAlertAtRef.current = now
     alert(t.highlight.saveFailed)
+    lastAlertAtRef.current = Date.now()
   }, [])
   const { highlights, save, remove } = useHighlights(initialHighlights, onHighlightError)
   const [menu, setMenu] = useState<{ id: string; anchor: { x: number; y: number } } | null>(null)
