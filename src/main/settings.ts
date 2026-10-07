@@ -51,6 +51,22 @@ export class SettingsStore {
     }
   }
 
+  /** Like load(), but only a missing or corrupt file yields defaults; other read errors propagate. */
+  private async loadForUpdate(): Promise<Settings> {
+    let text: string
+    try {
+      text = await readFile(this.filePath, 'utf8')
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { ...DEFAULT_SETTINGS }
+      throw err
+    }
+    try {
+      return parseSettings(JSON.parse(text))
+    } catch {
+      return { ...DEFAULT_SETTINGS }
+    }
+  }
+
   update(patch: unknown): Promise<Settings> {
     const run = this.queue.then(() => this.updateUnlocked(patch))
     this.queue = run.catch(() => undefined)
@@ -58,7 +74,7 @@ export class SettingsStore {
   }
 
   private async updateUnlocked(patch: unknown): Promise<Settings> {
-    const next = applySettingsPatch(await this.load(), patch)
+    const next = applySettingsPatch(await this.loadForUpdate(), patch)
     await mkdir(dirname(this.filePath), { recursive: true })
     const tempPath = `${this.filePath}.${randomUUID()}.tmp`
     await writeFile(tempPath, JSON.stringify(next, null, 2), 'utf8')

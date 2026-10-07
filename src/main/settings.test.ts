@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -61,6 +61,25 @@ describe('SettingsStore', () => {
       invertPages: true
     })
     expect(await readdir(dir)).toEqual(['settings.json'])
+  })
+
+  it('rejects an update without writing when the settings file cannot be read', async () => {
+    const filePath = join(dir, 'settings.json')
+    await mkdir(filePath) // reading a directory fails with EISDIR, not ENOENT
+    const store = new SettingsStore(filePath)
+    await expect(store.update({ invertPages: true })).rejects.toThrow()
+    expect(await readdir(dir)).toEqual(['settings.json'])
+    expect(await readdir(filePath)).toEqual([])
+    await rm(filePath, { recursive: true })
+    await expect(store.update({ invertPages: true })).resolves.toMatchObject({ invertPages: true })
+  })
+
+  it('starts from defaults when updating a missing or corrupt file', async () => {
+    const filePath = join(dir, 'settings.json')
+    const store = new SettingsStore(filePath)
+    await store.update({ theme: 'dark' })
+    await writeFile(filePath, '{ broken')
+    expect(await store.update({ invertPages: true })).toEqual({ ...DEFAULT_SETTINGS, invertPages: true })
   })
 
   it('rejects an invalid patch without writing', async () => {
