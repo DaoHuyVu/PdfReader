@@ -146,6 +146,73 @@ describe('PositionSaver', () => {
     expect(write).toHaveBeenCalledTimes(1)
   })
 
+  it('flushAll waits for every started flush and in-flight write before settling, then rejects with the first flush error', async () => {
+    let resolveB: () => void = () => undefined
+    const write = vi.fn((fingerprint: string) => {
+      if (fingerprint === 'a') return Promise.reject(new Error('a failed'))
+      return new Promise<void>((resolve) => {
+        resolveB = resolve
+      })
+    })
+    const saver = new PositionSaver(write)
+    saver.report('a', position(1))
+    saver.report('b', position(2))
+
+    let flushAllSettled = false
+    const flushAllPromise = saver.flushAll()
+    const settledFlag = flushAllPromise.then(
+      () => {
+        flushAllSettled = true
+      },
+      () => {
+        flushAllSettled = true
+      }
+    )
+
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(flushAllSettled).toBe(false)
+
+    resolveB()
+    await expect(flushAllPromise).rejects.toThrow('a failed')
+    await settledFlag
+    expect(flushAllSettled).toBe(true)
+  })
+
+  it('keeps the newest failed position when two overlapping writes for the same Fingerprint both fail', async () => {
+    let rejectP1: (err: unknown) => void = () => undefined
+    let rejectP2: (err: unknown) => void = () => undefined
+    const write = vi
+      .fn()
+      .mockReturnValueOnce(
+        new Promise<void>((_resolve, reject) => {
+          rejectP1 = reject
+        })
+      )
+      .mockReturnValueOnce(
+        new Promise<void>((_resolve, reject) => {
+          rejectP2 = reject
+        })
+      )
+    const saver = new PositionSaver(write)
+
+    saver.report('fp', position(1))
+    const flush1 = saver.flush('fp').catch(() => undefined)
+
+    saver.report('fp', position(2))
+    const flush2 = saver.flush('fp').catch(() => undefined)
+
+    rejectP1(new Error('p1 failed'))
+    await flush1
+    rejectP2(new Error('p2 failed'))
+    await flush2
+
+    write.mockResolvedValueOnce(undefined)
+    await saver.flush('fp')
+    expect(write).toHaveBeenLastCalledWith('fp', position(2))
+  })
+
   it('keeps a newer report that arrived while a failing flush was in flight (not overwritten by the failed one)', async () => {
     let rejectWrite: (err: unknown) => void = () => undefined
     const write = vi.fn().mockReturnValueOnce(

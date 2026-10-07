@@ -40,8 +40,12 @@ export class PositionSaver {
     try {
       await writePromise
     } catch (err) {
-      // Put it back for a retry, unless a newer report for this Fingerprint already took its place.
-      if (!this.pending.has(fingerprint)) this.pending.set(fingerprint, position)
+      // Put it back for a retry, unless a newer report for this Fingerprint already took its
+      // place, or the one already pending is itself newer than this failed position.
+      const current = this.pending.get(fingerprint)
+      if (!current || current.reading.updatedAt < position.reading.updatedAt) {
+        this.pending.set(fingerprint, position)
+      }
       throw err
     } finally {
       this.inFlight.delete(writePromise)
@@ -50,8 +54,9 @@ export class PositionSaver {
 
   async flushAll(): Promise<void> {
     const started = [...this.pending.keys()].map((fingerprint) => this.flush(fingerprint))
-    const inFlightSnapshot = [...this.inFlight]
-    await Promise.all([Promise.all(started), Promise.allSettled(inFlightSnapshot)])
+    const results = await Promise.allSettled([...started, ...this.inFlight])
+    const failed = results.slice(0, started.length).find((r) => r.status === 'rejected')
+    if (failed) throw (failed as PromiseRejectedResult).reason
   }
 
   hasPending(): boolean {
