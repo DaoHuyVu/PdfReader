@@ -57,6 +57,13 @@ function ReaderSurface({ pdf, initial }: { pdf: LoadedPdf; initial: ReadingPosit
   const restoredRef = useRef(false)
   const zoomRef = useRef(zoom)
   zoomRef.current = zoom
+  // The scrollTop the app itself just set (restore after first measure, zoom change, or
+  // resize); the next 'scroll' event caused by that assignment must not be treated as a
+  // user scroll and must not report a Reading Position.
+  const suppressedScrollTopRef = useRef<number | null>(null)
+  // The zoom value in effect at mount, so the zoom-sync effect below does not report a
+  // position just because it ran once after mount.
+  const initialZoomRef = useRef(zoom)
 
   const pageCount = pdf.pageSizes.length
   const measured = viewport.width > 0
@@ -82,12 +89,15 @@ function ReaderSurface({ pdf, initial }: { pdf: LoadedPdf; initial: ReadingPosit
     const element = scrollRef.current
     if (!element || !measured) return
     element.scrollTop = scrollTopForPosition(anchorRef.current, boxes)
+    suppressedScrollTopRef.current = element.scrollTop
     setScrollTop(element.scrollTop)
     restoredRef.current = true
   }, [boxes, measured])
 
   useEffect(() => {
-    if (restoredRef.current) report.call({ ...anchorRef.current, zoom, updatedAt: Date.now() })
+    if (restoredRef.current && zoom !== initialZoomRef.current) {
+      report.call({ ...anchorRef.current, zoom, updatedAt: Date.now() })
+    }
   }, [zoom, report])
 
   useEffect(() => {
@@ -117,6 +127,12 @@ function ReaderSurface({ pdf, initial }: { pdf: LoadedPdf; initial: ReadingPosit
   const onScroll = () => {
     const element = scrollRef.current
     if (!element) return
+    const suppressed = suppressedScrollTopRef.current
+    suppressedScrollTopRef.current = null
+    if (suppressed !== null && suppressed === element.scrollTop) {
+      setScrollTop(element.scrollTop)
+      return
+    }
     setScrollTop(element.scrollTop)
     if (!restoredRef.current) return
     const position = positionFromScroll(element.scrollTop, boxes)

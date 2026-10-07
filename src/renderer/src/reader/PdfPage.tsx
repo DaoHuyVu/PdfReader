@@ -1,6 +1,6 @@
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import { useEffect, useRef } from 'react'
-import type { PageBox } from './layout'
+import { canvasPixelRatio, type PageBox } from './layout'
 
 interface PdfPageProps {
   doc: PDFDocumentProxy
@@ -18,16 +18,17 @@ export function PdfPage({ doc, pageIndex, box, scale, visible }: PdfPageProps) {
     let cancelled = false
     let task: ReturnType<PDFPageProxy["render"]> | null = null
     void (async () => {
-      const page = await doc.getPage(pageIndex + 1)
-      const canvas = canvasRef.current
-      if (cancelled || !canvas) return
-      const viewport = page.getViewport({ scale: scale * (window.devicePixelRatio || 1) })
-      canvas.width = Math.floor(viewport.width)
-      canvas.height = Math.floor(viewport.height)
-      const context = canvas.getContext('2d')
-      if (!context) return
-      task = page.render({ canvasContext: context, viewport })
       try {
+        const page = await doc.getPage(pageIndex + 1)
+        const canvas = canvasRef.current
+        if (cancelled || !canvas) return
+        const ratio = canvasPixelRatio(box.width, box.height, window.devicePixelRatio || 1)
+        const viewport = page.getViewport({ scale: scale * ratio })
+        canvas.width = Math.floor(viewport.width)
+        canvas.height = Math.floor(viewport.height)
+        const context = canvas.getContext('2d')
+        if (!context) return
+        task = page.render({ canvasContext: context, viewport })
         await task.promise
       } catch (err) {
         if (!cancelled) console.error(`Failed to render page ${pageIndex + 1}`, err)
@@ -37,7 +38,7 @@ export function PdfPage({ doc, pageIndex, box, scale, visible }: PdfPageProps) {
       cancelled = true
       task?.cancel()
     }
-  }, [doc, pageIndex, scale, visible])
+  }, [doc, pageIndex, scale, visible, box.width, box.height])
 
   return (
     <div className="page" style={{ top: box.top, width: box.width, height: box.height }}>

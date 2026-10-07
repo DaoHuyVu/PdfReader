@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  canvasPixelRatio,
   computeScale,
   contentWidth,
   currentPageIndex,
   layoutPages,
+  MAX_CANVAS_PIXELS,
+  MAX_CANVAS_SIDE,
   positionFromScroll,
   scrollTopForPosition,
   stepZoom,
@@ -118,6 +121,26 @@ describe('visiblePageRange', () => {
 
   it('is empty for an empty Document', () => {
     expect(visiblePageRange(0, 300, [], 1)).toEqual({ first: 0, last: -1 })
+  })
+})
+
+describe('canvasPixelRatio', () => {
+  it('uses the device pixel ratio for a small page', () => {
+    expect(canvasPixelRatio(600, 800, 2)).toBe(2)
+  })
+
+  it('caps the ratio so the canvas area stays within the limit', () => {
+    const r = canvasPixelRatio(4000, 4000, 2)
+    expect(4000 * r * (4000 * r)).toBeLessThanOrEqual(MAX_CANVAS_PIXELS)
+    expect(r).toBeCloseTo(1.024, 3)
+  })
+
+  it('caps the ratio so neither canvas side exceeds the limit', () => {
+    expect(canvasPixelRatio(20000, 100, 1)).toBeCloseTo(MAX_CANVAS_SIDE / 20000, 6)
+  })
+
+  it('treats a devicePixelRatio of 0 or less as 1', () => {
+    expect(canvasPixelRatio(600, 800, 0)).toBe(1)
   })
 })
 

@@ -5,6 +5,8 @@ export const VIEW_PADDING = 16
 export const MIN_SCALE = 0.1
 export const MAX_SCALE = 5
 export const ZOOM_STEPS = [25, 50, 67, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400]
+export const MAX_CANVAS_PIXELS = 16_777_216
+export const MAX_CANVAS_SIDE = 16_384
 
 /** Page size in PDF units at scale 1. */
 export interface PageSize {
@@ -97,6 +99,19 @@ export function visiblePageRange(
   let last = first
   while (last + 1 < boxes.length && boxes[last + 1].top <= bottom) last++
   return { first: Math.max(0, first - overscan), last: Math.min(boxes.length - 1, last + overscan) }
+}
+
+/**
+ * The largest ratio <= devicePixelRatio such that a cssWidth x cssHeight canvas scaled by
+ * that ratio stays within Chromium's canvas area and side limits (so large pages at high
+ * zoom render softer instead of blank).
+ */
+export function canvasPixelRatio(cssWidth: number, cssHeight: number, devicePixelRatio: number): number {
+  const dpr = devicePixelRatio > 0 ? devicePixelRatio : 1
+  if (cssWidth <= 0 || cssHeight <= 0) return dpr
+  const areaLimit = Math.sqrt(MAX_CANVAS_PIXELS / (cssWidth * cssHeight))
+  const sideLimit = Math.min(MAX_CANVAS_SIDE / cssWidth, MAX_CANVAS_SIDE / cssHeight)
+  return Math.min(dpr, areaLimit, sideLimit)
 }
 
 export function stepZoom(currentScale: number, direction: 1 | -1): ZoomSetting {
