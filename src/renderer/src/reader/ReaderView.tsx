@@ -28,10 +28,18 @@ export function ReaderView() {
   useEffect(() => {
     let cancelled = false
     void (async () => {
+      const dataPromise = window.api.loadDocumentData().then(
+        (data) => data.reading,
+        (err) => {
+          console.error('Failed to load document data', err)
+          return null
+        }
+      )
       try {
-        const [bytes, data] = await Promise.all([window.api.readDocumentBytes(), window.api.loadDocumentData()])
+        const bytes = await window.api.readDocumentBytes()
         const pdf = await loadPdf(bytes)
-        if (!cancelled) setState({ status: 'ready', pdf, initial: data.reading })
+        const reading = await dataPromise
+        if (!cancelled) setState({ status: 'ready', pdf, initial: reading })
       } catch (err) {
         console.error('Failed to open document', err)
         if (!cancelled) setState({ status: 'error' })

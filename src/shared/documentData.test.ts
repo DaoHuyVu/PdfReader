@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   emptyDocumentData,
   mergeDocumentData,
+  newerReading,
   parseDocumentData,
   readingProgress,
   type DocumentData,
@@ -130,6 +131,33 @@ describe('mergeDocumentData', () => {
     const a = doc({ pageCount: 10, reading: reading(2, 50), highlights: [highlight('x', 3)], deletedHighlights: [{ id: 'y', deletedAt: 4 }] })
     const b = doc({ pageCount: 10, reading: reading(7, 60), highlights: [highlight('x', 9), highlight('y', 1)] })
     expect(mergeDocumentData(a, b)).toEqual(mergeDocumentData(b, a))
+  })
+})
+
+describe('newerReading', () => {
+  it('returns incoming when current is null', () => {
+    const incoming = reading(5, 10)
+    expect(newerReading(null, incoming)).toEqual(incoming)
+  })
+
+  it('returns incoming when current is older', () => {
+    const current = reading(1, 100)
+    const incoming = reading(2, 200)
+    expect(newerReading(current, incoming)).toEqual(incoming)
+  })
+
+  it('returns current when current is newer', () => {
+    const current = reading(2, 200)
+    const incoming = reading(1, 100)
+    expect(newerReading(current, incoming)).toEqual(current)
+  })
+
+  it('on equal timestamps, picks the same result as mergeDocumentData, order-independent', () => {
+    const current = reading(1, 100)
+    const incoming = reading(2, 100)
+    const viaMerge = mergeDocumentData(doc({ reading: current }), doc({ reading: incoming })).reading
+    expect(newerReading(current, incoming)).toEqual(viaMerge)
+    expect(newerReading(incoming, current)).toEqual(viaMerge)
   })
 })
 

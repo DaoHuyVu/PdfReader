@@ -14,7 +14,7 @@
 
 - Platform: Windows 10/11 x64. Paths are Windows paths; compare paths case-insensitively.
 - The app NEVER writes to, renames, or deletes the user's PDF files. It only reads them.
-- Data Folder: env var `PDFREADER_DATA_DIR` if set; else `%OneDrive%\PdfReaderData`; else `%APPDATA%\PdfReader`.
+- Data Folder: env var `PDFREADER_DATA_DIR` if set; else `%OneDriveConsumer%\PdfReaderData` (personal OneDrive; work `%OneDrive%`/`%OneDriveCommercial%` ignored); else `%APPDATA%\PdfReader`.
 - Document data: exactly one file per Document at `<Data Folder>\documents\<fingerprint>.json`, always written atomically (temp file in the same folder, then rename).
 - Document Fingerprint: SHA-256 hex (64 chars) of `"pdfreader-v1:<fileSize>:"` followed by the first 4 MiB (4 * 1024 * 1024 bytes) of the file.
 - OneDrive Conflict Copy: any file in the documents folder named `<fingerprint>-<anything>.json`.

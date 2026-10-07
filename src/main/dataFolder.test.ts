@@ -7,18 +7,44 @@ describe('resolveDataFolder', () => {
     expect(resolveDataFolder({ PDFREADER_DATA_DIR: 'X:\\dev-data', OneDrive: 'C:\\OneDrive' })).toBe('X:\\dev-data')
   })
 
-  it('defaults to a folder inside OneDrive', () => {
-    expect(resolveDataFolder({ OneDrive: 'C:\\Users\\me\\OneDrive', APPDATA: 'C:\\AppData' })).toBe(
-      join('C:\\Users\\me\\OneDrive', 'PdfReaderData')
-    )
+  it('defaults to a folder inside personal OneDrive (OneDriveConsumer)', () => {
+    expect(
+      resolveDataFolder({ OneDriveConsumer: 'C:\\Users\\me\\OneDrive', APPDATA: 'C:\\AppData' })
+    ).toBe(join('C:\\Users\\me\\OneDrive', 'PdfReaderData'))
   })
 
-  it('falls back to APPDATA without OneDrive', () => {
+  it('falls back to APPDATA when only work OneDrive (%OneDrive%) is set', () => {
+    expect(
+      resolveDataFolder({ OneDrive: 'C:\\Users\\me\\OneDrive - Tenant', APPDATA: 'C:\\AppData' })
+    ).toBe(join('C:\\AppData', 'PdfReader'))
+  })
+
+  it('falls back to APPDATA when only work OneDrive (%OneDriveCommercial%) is set', () => {
+    expect(
+      resolveDataFolder({ OneDriveCommercial: 'C:\\Users\\me\\OneDrive - Tenant', APPDATA: 'C:\\AppData' })
+    ).toBe(join('C:\\AppData', 'PdfReader'))
+  })
+
+  it('falls back to APPDATA without any OneDrive', () => {
     expect(resolveDataFolder({ APPDATA: 'C:\\AppData' })).toBe(join('C:\\AppData', 'PdfReader'))
+  })
+
+  it('prefers PDFREADER_DATA_DIR over OneDriveConsumer', () => {
+    expect(
+      resolveDataFolder({
+        PDFREADER_DATA_DIR: 'X:\\dev-data',
+        OneDriveConsumer: 'C:\\Users\\me\\OneDrive',
+        APPDATA: 'C:\\AppData'
+      })
+    ).toBe('X:\\dev-data')
   })
 
   it('throws when nothing is available', () => {
     expect(() => resolveDataFolder({})).toThrow(/data folder/i)
+  })
+
+  it('throws when only work OneDrive is set and APPDATA is missing', () => {
+    expect(() => resolveDataFolder({ OneDrive: 'C:\\Users\\me\\OneDrive - Tenant' })).toThrow(/data folder/i)
   })
 })
 

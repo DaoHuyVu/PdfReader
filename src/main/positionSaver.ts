@@ -39,6 +39,10 @@ export class PositionSaver {
     this.inFlight.add(writePromise)
     try {
       await writePromise
+    } catch (err) {
+      // Put it back for a retry, unless a newer report for this Fingerprint already took its place.
+      if (!this.pending.has(fingerprint)) this.pending.set(fingerprint, position)
+      throw err
     } finally {
       this.inFlight.delete(writePromise)
     }

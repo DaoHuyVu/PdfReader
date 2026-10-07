@@ -1,9 +1,9 @@
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { emptyDocumentData, parseDocumentData, type Highlight, type ReadingPosition } from '../shared/documentData'
-import { DocumentStore, withRetry } from './documentStore'
+import { DocumentStore, UnsupportedSchemaError, withRetry } from './documentStore'
 
 function errnoError(code: string): NodeJS.ErrnoException {
   const err = new Error(code) as NodeJS.ErrnoException
@@ -110,6 +110,30 @@ describe('DocumentStore', () => {
     await store.update(other, (d) => ({ ...d, pageCount: 7 }))
     await store.update(FP, (d) => ({ ...d, pageCount: 3 }))
     expect((await store.load(other)).pageCount).toBe(7)
+  })
+
+  it('rejects with UnsupportedSchemaError for a main file with a newer schemaVersion, and leaves it untouched', async () => {
+    const newer = { schemaVersion: 2, fingerprint: FP, somethingNew: true }
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, `${FP}.json`), JSON.stringify(newer))
+
+    await expect(store.load(FP)).rejects.toBeInstanceOf(UnsupportedSchemaError)
+    expect(await readdir(dir)).toEqual([`${FP}.json`])
+    expect(JSON.parse(await readFile(join(dir, `${FP}.json`), 'utf8'))).toEqual(newer)
+
+    await expect(store.update(FP, (d) => d)).rejects.toBeInstanceOf(UnsupportedSchemaError)
+    expect(JSON.parse(await readFile(join(dir, `${FP}.json`), 'utf8'))).toEqual(newer)
+  })
+
+  it('skips and leaves in place a Conflict Copy with a newer schemaVersion, next to a valid v1 main file', async () => {
+    await store.update(FP, (d) => ({ ...d, pageCount: 2 }))
+    const newerCopy = { schemaVersion: 2, fingerprint: FP, somethingNew: true }
+    await writeFile(join(dir, `${FP}-LAPTOP.json`), JSON.stringify(newerCopy))
+
+    const loaded = await store.load(FP)
+
+    expect(loaded.pageCount).toBe(2)
+    expect((await readdir(dir)).sort()).toEqual([`${FP}-LAPTOP.json`, `${FP}.json`])
   })
 })
 

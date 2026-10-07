@@ -115,12 +115,56 @@ describe('PositionSaver', () => {
     expect(flushAllResolved).toBe(true)
   })
 
-  it('hasPending is false after a failed write', async () => {
+  it('hasPending stays true after a failed write (the position is kept pending for a retry)', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const saver = new PositionSaver(vi.fn().mockRejectedValue(new Error('disk full')))
     saver.report('fp', position(1))
     await saver.flush('fp').catch(() => undefined)
-    expect(saver.hasPending()).toBe(false)
+    expect(saver.hasPending()).toBe(true)
     error.mockRestore()
+  })
+
+  it('puts the position back into pending after a failed flush, and retries it on the next flush', async () => {
+    const write = vi.fn().mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce(undefined)
+    const saver = new PositionSaver(write)
+    saver.report('fp', position(1))
+    await expect(saver.flush('fp')).rejects.toThrow('disk full')
+    expect(saver.hasPending()).toBe(true)
+
+    await saver.flush('fp')
+    expect(write).toHaveBeenCalledTimes(2)
+    expect(write).toHaveBeenNthCalledWith(2, 'fp', position(1))
+  })
+
+  it('does not re-arm the timer after a failed flush (no new setTimeout)', async () => {
+    const write = vi.fn().mockRejectedValue(new Error('disk full'))
+    const saver = new PositionSaver(write)
+    saver.report('fp', position(1))
+    await expect(saver.flush('fp')).rejects.toThrow('disk full')
+    await vi.advanceTimersByTimeAsync(10000)
+    // Still only the one failed call from the explicit flush; the debounce timer was not re-armed.
+    expect(write).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a newer report that arrived while a failing flush was in flight (not overwritten by the failed one)', async () => {
+    let rejectWrite: (err: unknown) => void = () => undefined
+    const write = vi.fn().mockReturnValueOnce(
+      new Promise<void>((_resolve, reject) => {
+        rejectWrite = reject
+      })
+    )
+    const saver = new PositionSaver(write)
+    saver.report('fp', position(1))
+    const flushPromise = saver.flush('fp').catch(() => undefined)
+
+    saver.report('fp', position(2))
+
+    rejectWrite(new Error('disk full'))
+    await flushPromise
+
+    expect(saver.hasPending()).toBe(true)
+    write.mockResolvedValueOnce(undefined)
+    await saver.flush('fp')
+    expect(write).toHaveBeenLastCalledWith('fp', position(2))
   })
 })

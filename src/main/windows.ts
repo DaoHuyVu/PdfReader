@@ -63,6 +63,8 @@ export class AppWindows {
     this.contexts.set(id, context)
     win.on('closed', () => this.contexts.delete(id))
     win.on('page-title-updated', (event) => event.preventDefault())
+    win.webContents.on('will-navigate', (event) => event.preventDefault())
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     win.once('ready-to-show', () => win.show())
     if (process.env['ELECTRON_RENDERER_URL']) void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
     else void win.loadFile(join(__dirname, '../renderer/index.html'))

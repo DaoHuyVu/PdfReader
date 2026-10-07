@@ -56,7 +56,7 @@ _Avoid_: Tombstone (in UI text)
 ### Sync
 
 **Data Folder**:
-The folder holding all Document data, by default inside the user's OneDrive so every machine sees the same data.
+The folder holding all Document data, by default inside the user's personal OneDrive so every machine sees the same data.
 _Avoid_: Database, storage, profile
 
 **Conflict Copy**:

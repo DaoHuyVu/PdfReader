@@ -1,7 +1,7 @@
-import { app, dialog, ipcMain, Menu, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { access, readFile } from 'fs/promises'
 import { basename, join } from 'path'
-import { readingProgress, type ReadingPosition } from '../shared/documentData'
+import { newerReading, readingProgress, type ReadingPosition } from '../shared/documentData'
 import { IPC, type DocumentContext, type OpenResult, type RecentView } from '../shared/ipc'
 import { t } from '../shared/strings'
 import { findPdfArg } from './argv'
@@ -16,7 +16,7 @@ const windows = new AppWindows()
 const store = new DocumentStore(documentsDir(resolveDataFolder(process.env)))
 const recent = new RecentStore(join(app.getPath('userData'), 'recent.json'))
 const saver = new PositionSaver(async (fingerprint, { reading, pageCount }) => {
-  await store.update(fingerprint, (data) => ({ ...data, pageCount, reading }))
+  await store.update(fingerprint, (data) => ({ ...data, pageCount, reading: newerReading(data.reading, reading) }))
 })
 
 function logSaveError(err: unknown): void {
@@ -106,7 +106,12 @@ function registerIpc(): void {
   ipcMain.handle(IPC.loadDocumentData, (event) => store.load(requireDocument(event).fingerprint))
   ipcMain.on(IPC.reportReadingPosition, (event, reading: ReadingPosition, pageCount: number) => {
     const context = documentOf(event)
-    if (context) saver.report(context.fingerprint, { reading, pageCount })
+    if (!context) return
+    saver.report(context.fingerprint, { reading, pageCount })
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win || win.isDestroyed() || !win.isFocused()) {
+      void saver.flush(context.fingerprint).catch(logSaveError)
+    }
   })
   ipcMain.handle(IPC.openFileDialog, () => showOpenDialog())
   ipcMain.handle(IPC.openPath, (_event, path: string) => openPath(path))
@@ -151,8 +156,14 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('window-all-closed', () => app.quit())
 
+  let quitFlushRounds = 0
   app.on('will-quit', (event) => {
     if (!saver.hasPending()) return
+    quitFlushRounds++
+    if (quitFlushRounds > 3) {
+      console.error('Quitting with unsaved reading positions')
+      return
+    }
     event.preventDefault()
     void saver
       .flushAll()

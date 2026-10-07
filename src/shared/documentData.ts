@@ -105,6 +105,12 @@ export function mergeDocumentData(a: DocumentData, b: DocumentData): DocumentDat
   }
 }
 
+/** Returns whichever of `current`/`incoming` is newer, same tie-break as `mergeDocumentData`. */
+export function newerReading(current: ReadingPosition | null, incoming: ReadingPosition): ReadingPosition {
+  if (!current) return incoming
+  return pickNewer(current, incoming)
+}
+
 export function readingProgress(reading: ReadingPosition | null, pageCount: number): number | null {
   if (!reading || pageCount <= 0) return null
   return Math.min(1, (reading.pageIndex + reading.offsetRatio) / pageCount)
