@@ -51,9 +51,12 @@ const textIndexCache = new WeakMap<PDFDocumentProxy, Promise<TextIndex>>()
 export function getDocumentTextIndex(doc: PDFDocumentProxy): Promise<TextIndex> {
   let cached = textIndexCache.get(doc)
   if (!cached) {
-    cached = Promise.all(Array.from({ length: doc.numPages }, (_, i) => loadPageTextRuns(doc, i))).then((pages) =>
-      buildTextIndex(pages.flat())
-    )
+    cached = Promise.all(Array.from({ length: doc.numPages }, (_, i) => loadPageTextRuns(doc, i)))
+      .then((pages) => buildTextIndex(pages.flat()))
+      .catch((err) => {
+        textIndexCache.delete(doc)
+        throw err
+      })
     textIndexCache.set(doc, cached)
   }
   return cached

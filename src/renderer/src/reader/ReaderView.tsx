@@ -19,7 +19,7 @@ import { highlightScrollTop, highlightsByPage } from './highlights/geometry'
 import { HighlightLayer } from './highlights/HighlightLayer'
 import { HighlightMenu } from './highlights/HighlightMenu'
 import { HighlightPanel } from './highlights/HighlightPanel'
-import { reanchorHighlight } from './highlights/reanchor'
+import { reanchorCarried } from './highlights/reanchor'
 import { hitTestHighlight, isEditableTarget, readSelection, type PendingSelection } from './highlights/selection'
 import { SelectionToolbar } from './highlights/SelectionToolbar'
 import { useHighlights } from './highlights/useHighlights'
@@ -111,16 +111,23 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
   const menuHighlight = menu ? (highlights.find((h) => h.id === menu.id) ?? null) : null
   const closeMenu = useCallback(() => setMenu(null), [])
 
-  // Carried Highlights came from an earlier version of this file; find their text again.
+  // Kept up to date every render so the re-anchor effect below reads the CURRENT Highlights
+  // (not a stale mount-time copy) once the text index has finished building.
+  const highlightsRef = useRef(highlights)
+  highlightsRef.current = highlights
+
+  // Carried Highlights came from an earlier version of this file; find their text again. Building
+  // the text index can take a while, during which the user may edit or delete a carried Highlight;
+  // reanchorCarried re-checks each one against the current state so that edit/delete is not lost.
   useEffect(() => {
-    const carried = initialHighlights.filter((h) => h.status === 'carried')
-    if (carried.length === 0) return
+    const carriedIds = new Set(initialHighlights.filter((h) => h.status === 'carried').map((h) => h.id))
+    if (carriedIds.size === 0) return
     let cancelled = false
     getDocumentTextIndex(pdf.doc)
       .then((index) => {
         if (cancelled) return
         const now = Date.now()
-        for (const highlight of carried) save(reanchorHighlight(index, highlight, now))
+        for (const highlight of reanchorCarried(index, highlightsRef.current, carriedIds, now)) save(highlight)
       })
       .catch((err) => console.error('Failed to re-anchor highlights', err))
     return () => {

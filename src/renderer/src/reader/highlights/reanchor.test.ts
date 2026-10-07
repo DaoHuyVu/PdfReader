@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Highlight } from '../../../../shared/documentData'
-import { reanchorHighlight } from './reanchor'
+import { reanchorCarried, reanchorHighlight } from './reanchor'
 import { buildTextIndex, type TextRun } from './textIndex'
 
 const RUNS: TextRun[] = [
@@ -41,5 +41,29 @@ describe('reanchorHighlight', () => {
     expect(result.status).toBe('unanchored')
     expect(result.parts).toEqual(carried('termination clause', 0, 10).parts)
     expect(result.updatedAt).toBe(99)
+  })
+})
+
+describe('reanchorCarried', () => {
+  it('skips a Highlight that was deleted before the index resolved', () => {
+    const current: Highlight[] = []
+    const result = reanchorCarried(INDEX, current, new Set(['h']), 99)
+    expect(result).toEqual([])
+  })
+
+  it('skips a Highlight whose status is no longer carried', () => {
+    const edited: Highlight = { ...carried('payment terms', 0, 12), status: undefined }
+    const result = reanchorCarried(INDEX, [edited], new Set(['h']), 99)
+    expect(result).toEqual([])
+  })
+
+  it('re-anchors a carried Highlight using its current (possibly edited) fields', () => {
+    const editedColor: Highlight = { ...carried('payment terms', 0, 12), color: 'pink', note: 'edited note' }
+    const result = reanchorCarried(INDEX, [editedColor], new Set(['h']), 99)
+    expect(result).toHaveLength(1)
+    expect(result[0].status).toBeUndefined()
+    expect(result[0].color).toBe('pink')
+    expect(result[0].note).toBe('edited note')
+    expect(result[0].parts).toEqual([{ pageIndex: 0, rects: [{ x: 0, y: 10, width: 130, height: 10 }] }])
   })
 })

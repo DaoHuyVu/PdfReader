@@ -24,3 +24,22 @@ export function reanchorHighlight(index: TextIndex, highlight: Highlight, now: n
   if (!best) return { ...highlight, status: 'unanchored', updatedAt: now }
   return { ...highlight, parts: best, status: undefined, updatedAt: now }
 }
+
+/**
+ * Re-anchors the still-carried Highlights of `carriedIds` against the CURRENT list, so a
+ * Highlight edited or deleted while the text index was building is not overwritten by a stale
+ * copy. A Highlight that is gone, or whose status is no longer 'carried', is skipped.
+ */
+export function reanchorCarried(
+  index: TextIndex,
+  current: Highlight[],
+  carriedIds: ReadonlySet<string>,
+  now: number
+): Highlight[] {
+  const result: Highlight[] = []
+  for (const highlight of current) {
+    if (!carriedIds.has(highlight.id) || highlight.status !== 'carried') continue
+    result.push(reanchorHighlight(index, highlight, now))
+  }
+  return result
+}
