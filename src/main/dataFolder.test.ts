@@ -1,6 +1,6 @@
 import { join } from 'path'
 import { describe, expect, it } from 'vitest'
-import { documentsDir, resolveDataFolder } from './dataFolder'
+import { describeDataFolder, documentsDir, resolveDataFolder } from './dataFolder'
 
 describe('resolveDataFolder', () => {
   it('uses PDFREADER_DATA_DIR when set', () => {
@@ -51,5 +51,23 @@ describe('resolveDataFolder', () => {
 describe('documentsDir', () => {
   it('is the documents subfolder', () => {
     expect(documentsDir('D:\\data')).toBe(join('D:\\data', 'documents'))
+  })
+})
+
+describe('resolveDataFolder with a Settings folder', () => {
+  it('uses the Settings folder after the env override and before OneDrive', () => {
+    const env = { OneDriveConsumer: 'C:\\Users\\me\\OneDrive', APPDATA: 'C:\\AppData' }
+    expect(resolveDataFolder(env, 'E:\\Sync\\Reader')).toBe('E:\\Sync\\Reader')
+    expect(resolveDataFolder({ ...env, PDFREADER_DATA_DIR: 'X:\\dev' }, 'E:\\Sync\\Reader')).toBe('X:\\dev')
+    expect(resolveDataFolder(env, null)).toBe(join('C:\\Users\\me\\OneDrive', 'PdfReaderData'))
+  })
+})
+
+describe('describeDataFolder', () => {
+  it('names where the folder came from', () => {
+    expect(describeDataFolder({ PDFREADER_DATA_DIR: 'X:\\dev' }).source).toBe('env')
+    expect(describeDataFolder({ APPDATA: 'C:\\AppData' }, 'E:\\R').source).toBe('settings')
+    expect(describeDataFolder({ OneDriveConsumer: 'C:\\OD', APPDATA: 'C:\\AppData' }).source).toBe('onedrive')
+    expect(describeDataFolder({ APPDATA: 'C:\\AppData' })).toEqual({ path: join('C:\\AppData', 'PdfReader'), source: 'appdata' })
   })
 })
