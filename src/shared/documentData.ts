@@ -139,13 +139,18 @@ export function parseDocumentData(raw: unknown): DocumentData {
   const r = raw as Record<string, unknown>
   if (r.schemaVersion !== 1) throw new Error(`Unsupported schemaVersion: ${String(r.schemaVersion)}`)
   if (typeof r.fingerprint !== 'string' || r.fingerprint === '') throw new Error('Document data has no fingerprint')
+  const deletedHighlights = Array.isArray(r.deletedHighlights) ? r.deletedHighlights.filter(isDeletedHighlight) : []
+  const deletedIds = new Set(deletedHighlights.map((d) => d.id))
+  const highlights = Array.isArray(r.highlights)
+    ? r.highlights.filter(isHighlight).filter((h) => !deletedIds.has(h.id))
+    : []
   return {
     schemaVersion: 1,
     fingerprint: r.fingerprint,
     pageCount: isIndex(r.pageCount) ? r.pageCount : 0,
     reading: isReadingPosition(r.reading) ? r.reading : null,
-    highlights: Array.isArray(r.highlights) ? r.highlights.filter(isHighlight) : [],
-    deletedHighlights: Array.isArray(r.deletedHighlights) ? r.deletedHighlights.filter(isDeletedHighlight) : []
+    highlights,
+    deletedHighlights
   }
 }
 
@@ -194,8 +199,24 @@ export function readingProgress(reading: ReadingPosition | null, pageCount: numb
 }
 
 export function upsertHighlight(data: DocumentData, highlight: Highlight): DocumentData {
+  if (data.deletedHighlights.some((d) => d.id === highlight.id)) return data
   const others = data.highlights.filter((h) => h.id !== highlight.id)
   return { ...data, highlights: [...others, highlight].sort(byCreation) }
+}
+
+/** Rebuilds a Highlight from known fields only, dropping any extra properties before it is persisted. */
+export function normalizeHighlight(highlight: Highlight): Highlight {
+  const normalized: Highlight = {
+    id: highlight.id,
+    color: highlight.color,
+    note: highlight.note,
+    text: highlight.text,
+    parts: highlight.parts,
+    createdAt: highlight.createdAt,
+    updatedAt: highlight.updatedAt
+  }
+  if (highlight.status !== undefined) normalized.status = highlight.status
+  return normalized
 }
 
 export function removeHighlight(data: DocumentData, id: string, deletedAt: number): DocumentData {

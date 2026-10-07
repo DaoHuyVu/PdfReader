@@ -7,6 +7,7 @@ import {
   isHighlight,
   isReadingPosition,
   newerReading,
+  normalizeHighlight,
   readingProgress,
   removeHighlight,
   upsertHighlight
@@ -173,7 +174,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.saveHighlight, async (event, highlight: unknown) => {
     const { fingerprint } = requireDocument(event)
     if (!isHighlight(highlight)) throw new Error('Invalid highlight')
-    await store.update(fingerprint, (data) => upsertHighlight(data, highlight))
+    await store.update(fingerprint, (data) => upsertHighlight(data, normalizeHighlight(highlight)))
   })
   ipcMain.handle(IPC.deleteHighlight, async (event, id: unknown) => {
     const { fingerprint } = requireDocument(event)

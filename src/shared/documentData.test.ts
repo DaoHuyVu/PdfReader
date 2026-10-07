@@ -8,6 +8,7 @@ import {
   isReadingPosition,
   mergeDocumentData,
   newerReading,
+  normalizeHighlight,
   parseDocumentData,
   readingProgress,
   removeHighlight,
@@ -247,6 +248,33 @@ describe('parseDocumentData validation', () => {
     expect(parsed.highlights.map((h) => h.id)).toEqual(['ok'])
     expect(parsed.deletedHighlights).toEqual([{ id: 'gone', deletedAt: 5 }])
   })
+
+  it('drops Highlights that have a deletion record', () => {
+    const parsed = parseDocumentData({
+      schemaVersion: 1,
+      fingerprint: FP,
+      highlights: [highlight('kept'), highlight('deleted')],
+      deletedHighlights: [{ id: 'deleted', deletedAt: 5 }]
+    })
+    expect(parsed.highlights.map((h) => h.id)).toEqual(['kept'])
+  })
+})
+
+describe('normalizeHighlight', () => {
+  it('drops unknown extra properties', () => {
+    const withExtra = { ...highlight('a'), evil: 'payload', another: 123 }
+    expect(normalizeHighlight(withExtra as unknown as Highlight)).toEqual(highlight('a'))
+  })
+
+  it('keeps status absent when not present', () => {
+    const h = highlight('a')
+    expect(normalizeHighlight(h)).not.toHaveProperty('status')
+  })
+
+  it('keeps status when present', () => {
+    const h = { ...highlight('a'), status: 'carried' as const }
+    expect(normalizeHighlight(h).status).toBe('carried')
+  })
 })
 
 describe('upsertHighlight', () => {
@@ -258,6 +286,11 @@ describe('upsertHighlight', () => {
   it('replaces a Highlight with the same id', () => {
     const edited = { ...highlight('a', 9), color: 'green' as const }
     expect(upsertHighlight(doc({ highlights: [highlight('a')] }), edited).highlights).toEqual([edited])
+  })
+
+  it('ignores an upsert onto a deleted id', () => {
+    const data = doc({ deletedHighlights: [{ id: 'a', deletedAt: 10 }] })
+    expect(upsertHighlight(data, highlight('a', 999))).toEqual(data)
   })
 })
 
