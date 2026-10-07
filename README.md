@@ -20,7 +20,23 @@ A personal desktop PDF reader for Windows that remembers where you stopped readi
 - Windows 10 or 11 (x64)
 - Node.js 20.19+ or 22.12+ (required by Vite 7)
 
-## Getting started
+## Install
+
+```bash
+npm install
+npm run dist
+```
+
+This builds `dist\PdfReader Setup <version>.exe`. Run it once:
+- It installs PdfReader for the current user into `%LOCALAPPDATA%\Programs\PdfReader`, with no admin prompt.
+- It creates a **PdfReader** desktop shortcut and a Start menu entry.
+- It starts the app when it finishes.
+
+After that, double-click the desktop icon to start the app. Uninstall it from Windows Settings > Apps.
+
+The installer is not code-signed, so Windows SmartScreen may show "Windows protected your PC". Click **More info**, then **Run anyway**.
+
+## Getting started (development)
 
 ```bash
 npm install
@@ -30,6 +46,7 @@ npm run dev
 | Script | What it does |
 |---|---|
 | `npm run dev` | Starts the app with hot reload |
+| `npm run dist` | Builds the Windows installer into `dist\` |
 | `npm run build` | Builds main, preload and renderer into `out/` |
 | `npm run preview` | Runs the built app |
 | `npm run typecheck` | Runs TypeScript with no output files |
@@ -69,7 +86,9 @@ How sync works:
 
 See [ADR 0002](docs/adr/0002-per-document-json-in-onedrive.md).
 
-The Recent Documents list is stored per machine in `%APPDATA%\pdf-reader\recent.json`, because file paths differ between machines.
+The Recent Documents list is stored per machine, because file paths differ between machines:
+- installed app: `%APPDATA%\PdfReader\recent.json`
+- `npm run dev`: `%APPDATA%\pdf-reader\recent.json`
 
 ## Development notes
 
@@ -105,4 +124,4 @@ Unit tests sit next to the code they test (`*.test.ts`). They cover the pure log
 
 - **Plan 2: Highlights & Notes.** Select text and pick one of 5 colors (keys `1`–`5`), attach Notes, show a Highlight sidebar with color filter and search, re-anchor Highlights when a file changes, and Carry Over data to a changed file.
 - **Plan 3: Reader features.** Ctrl+F search, outline sidebar, dark mode with optional page inversion, password-protected PDFs, a notice for scanned PDFs without text, and a Settings screen to choose the Data Folder.
-- **Plan 4: Export & packaging.** Export a new PDF that contains Highlights and Notes (the original file is never changed), and an NSIS installer with "Open with" registration.
+- **Plan 4: Export & packaging.** Export a new PDF that contains Highlights and Notes (the original file is never changed), an app icon, and "Open with" registration for `.pdf` in the installer. The basic installer with a desktop shortcut already exists.
