@@ -45,6 +45,7 @@ type LoadState =
   | { status: 'ready'; pdf: LoadedPdf; initial: ReadingPosition | null; highlights: Highlight[] }
 
 const NO_HIGHLIGHTS: Highlight[] = []
+const ALERT_BURST_WINDOW_MS = 3000
 
 export function ReaderView() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
@@ -105,7 +106,13 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
   // position just because it ran once after mount.
   const initialZoomRef = useRef(zoom)
 
-  const onHighlightError = useCallback(() => alert(t.highlight.saveFailed), [])
+  const lastAlertAtRef = useRef(0)
+  const onHighlightError = useCallback(() => {
+    const now = Date.now()
+    if (now - lastAlertAtRef.current < ALERT_BURST_WINDOW_MS) return
+    lastAlertAtRef.current = now
+    alert(t.highlight.saveFailed)
+  }, [])
   const { highlights, save, remove } = useHighlights(initialHighlights, onHighlightError)
   const [menu, setMenu] = useState<{ id: string; anchor: { x: number; y: number } } | null>(null)
   const menuHighlight = menu ? (highlights.find((h) => h.id === menu.id) ?? null) : null
@@ -194,6 +201,7 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
   // the window selection and leaving any open toolbar anchored to a stale position.
   useEffect(() => {
     setSelection(null)
+    setMenu(null)
   }, [scale])
 
   useEffect(() => {
@@ -258,6 +266,7 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
     const element = scrollRef.current
     if (!element) return
     setSelection(null)
+    setMenu(null)
     const suppressed = suppressedScrollTopRef.current
     suppressedScrollTopRef.current = null
     if (suppressed !== null && suppressed === element.scrollTop) {

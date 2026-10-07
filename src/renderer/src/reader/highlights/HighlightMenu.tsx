@@ -23,7 +23,7 @@ export function HighlightMenu({ highlight, anchor, onChange, onDelete, onClose }
       if (ref.current && !ref.current.contains(event.target as Node)) onClose()
     }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape' && !event.isComposing) onClose()
     }
     document.addEventListener('mousedown', onMouseDown)
     document.addEventListener('keydown', onKeyDown)
