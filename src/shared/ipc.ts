@@ -1,0 +1,36 @@
+import type { DocumentData, Fingerprint, ReadingPosition } from './documentData'
+
+export const IPC = {
+  getContext: 'window:get-context',
+  readDocumentBytes: 'document:read-bytes',
+  loadDocumentData: 'document:load-data',
+  reportReadingPosition: 'document:report-reading-position',
+  openFileDialog: 'app:open-file-dialog',
+  openPath: 'app:open-path',
+  listRecent: 'app:list-recent'
+} as const
+
+export type DocumentContext = { kind: 'document'; path: string; fileName: string; fingerprint: Fingerprint }
+export type WindowContext = { kind: 'home' } | DocumentContext
+
+export interface RecentView {
+  fingerprint: Fingerprint
+  path: string
+  fileName: string
+  openedAt: number
+  exists: boolean
+  /** Reading Progress from 0 to 1, or null if the Document was never read. */
+  progress: number | null
+}
+
+export type OpenResult = { ok: true } | { ok: false; reason: 'missing' | 'not-pdf' | 'error'; message?: string }
+
+export interface PdfReaderApi {
+  getContext(): Promise<WindowContext>
+  readDocumentBytes(): Promise<Uint8Array>
+  loadDocumentData(): Promise<DocumentData>
+  reportReadingPosition(reading: ReadingPosition, pageCount: number): void
+  openFileDialog(): Promise<void>
+  openPath(path: string): Promise<OpenResult>
+  listRecent(): Promise<RecentView[]>
+}

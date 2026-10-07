@@ -1,3 +1,10 @@
+import { useEffect, useState } from 'react'
+import type { WindowContext } from '../../shared/ipc'
+
 export function App() {
-  return <h1>PdfReader</h1>
+  const [context, setContext] = useState<WindowContext | null>(null)
+  useEffect(() => {
+    void window.api.getContext().then(setContext)
+  }, [])
+  return <pre>{JSON.stringify(context, null, 2)}</pre>
 }
