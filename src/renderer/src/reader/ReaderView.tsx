@@ -35,7 +35,9 @@ import {
   visiblePageRange,
   type PagePosition
 } from './layout'
-import { getDocumentTextIndex, loadPdf, type LoadedPdf } from './pdf'
+import { OutlinePanel } from './outline/OutlinePanel'
+import { outlineScrollTop, type OutlineNode, type OutlineTarget } from './outline/outline'
+import { getDocumentTextIndex, loadOutline, loadPdf, type LoadedPdf } from './pdf'
 import { PdfPage } from './PdfPage'
 import { createThrottle } from './throttle'
 
@@ -145,6 +147,30 @@ function ReaderSurface({ pdf, initial, initialHighlights, invertPages }: ReaderS
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [focusedId, setFocusedId] = useState<string | null>(null)
+  const [sidebarTab, setSidebarTab] = useState<'outline' | 'highlights'>('outline')
+  const [outline, setOutline] = useState<OutlineNode[] | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    loadOutline(pdf.doc).then(
+      (nodes) => {
+        if (!cancelled) setOutline(nodes)
+      },
+      (err) => {
+        console.error('Failed to load outline', err)
+        if (!cancelled) setOutline([])
+      }
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [pdf.doc])
+
+  const goToOutline = (target: OutlineTarget) => {
+    const element = scrollRef.current
+    const top = outlineScrollTop(target, boxes, scale)
+    if (element && top !== null) element.scrollTop = top
+  }
 
   useEffect(() => {
     if (focusedId === null) return
@@ -337,7 +363,31 @@ function ReaderSurface({ pdf, initial, initialHighlights, invertPages }: ReaderS
       <div className="reader-body">
         {sidebarOpen && (
           <aside className="sidebar">
-            <HighlightPanel highlights={highlights} activeId={activeId} onSelect={goToHighlight} />
+            <div className="sidebar-tabs" role="tablist">
+              <button
+                role="tab"
+                aria-selected={sidebarTab === 'outline'}
+                className={sidebarTab === 'outline' ? 'active' : ''}
+                onClick={() => setSidebarTab('outline')}
+              >
+                {t.outline.tab}
+              </button>
+              <button
+                role="tab"
+                aria-selected={sidebarTab === 'highlights'}
+                className={sidebarTab === 'highlights' ? 'active' : ''}
+                onClick={() => setSidebarTab('highlights')}
+              >
+                {t.highlight.tab}
+              </button>
+            </div>
+            {sidebarTab === 'outline' ? (
+              <div className="outline-panel">
+                <OutlinePanel nodes={outline} onNavigate={goToOutline} />
+              </div>
+            ) : (
+              <HighlightPanel highlights={highlights} activeId={activeId} onSelect={goToHighlight} />
+            )}
           </aside>
         )}
         <div className="scroll" ref={scrollRef} onScroll={onScroll} onMouseUp={onMouseUp}>

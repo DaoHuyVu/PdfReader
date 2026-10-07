@@ -1,8 +1,10 @@
 import * as pdfjs from 'pdfjs-dist'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
+import type { RefProxy } from 'pdfjs-dist/types/src/display/api'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { buildTextIndex, type TextIndex, type TextRun } from './highlights/textIndex'
 import type { PageSize } from './layout'
+import type { OutlineNode, OutlineTarget } from './outline/outline'
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -60,4 +62,40 @@ export function getDocumentTextIndex(doc: PDFDocumentProxy): Promise<TextIndex> 
     textIndexCache.set(doc, cached)
   }
   return cached
+}
+
+type RawOutlineItem = Awaited<ReturnType<PDFDocumentProxy['getOutline']>>[number]
+
+async function resolveOutlineTarget(
+  doc: PDFDocumentProxy,
+  dest: string | unknown[] | null
+): Promise<OutlineTarget | null> {
+  const explicit = typeof dest === 'string' ? await doc.getDestination(dest) : dest
+  if (!Array.isArray(explicit) || explicit.length === 0) return null
+  const [ref, mode, ...args] = explicit as unknown[]
+  let pageIndex: number
+  if (Number.isInteger(ref)) pageIndex = ref as number
+  else if (typeof ref === 'object' && ref !== null) pageIndex = await doc.getPageIndex(ref as RefProxy)
+  else return null
+  const name = typeof mode === 'object' && mode !== null ? (mode as { name?: unknown }).name : undefined
+  const pdfTop = name === 'XYZ' ? args[1] : name === 'FitH' || name === 'FitBH' ? args[0] : null
+  if (typeof pdfTop !== 'number') return { pageIndex, top: null }
+  const page = await doc.getPage(pageIndex + 1)
+  const [, top] = page.getViewport({ scale: 1 }).convertToViewportPoint(0, pdfTop)
+  return { pageIndex, top }
+}
+
+async function toOutlineNode(doc: PDFDocumentProxy, item: RawOutlineItem): Promise<OutlineNode> {
+  const [target, children] = await Promise.all([
+    resolveOutlineTarget(doc, item.dest).catch(() => null),
+    Promise.all((item.items as RawOutlineItem[]).map((child) => toOutlineNode(doc, child)))
+  ])
+  return { title: item.title, target, children }
+}
+
+/** The Document's outline (bookmarks) with each entry resolved to a page and position. */
+export async function loadOutline(doc: PDFDocumentProxy): Promise<OutlineNode[]> {
+  const items = await doc.getOutline()
+  if (!items) return []
+  return Promise.all(items.map((item) => toOutlineNode(doc, item)))
 }
