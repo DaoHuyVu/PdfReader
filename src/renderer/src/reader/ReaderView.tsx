@@ -37,7 +37,15 @@ import {
 } from './layout'
 import { OutlinePanel } from './outline/OutlinePanel'
 import { outlineScrollTop, type OutlineNode, type OutlineTarget } from './outline/outline'
-import { getDocumentTextIndex, loadOutline, loadPdf, type LoadedPdf } from './pdf'
+import {
+  getDocumentTextIndex,
+  loadOutline,
+  loadPdf,
+  PasswordCancelledError,
+  type LoadedPdf,
+  type PasswordReason
+} from './pdf'
+import { PasswordPrompt } from './PasswordPrompt'
 import { PdfPage } from './PdfPage'
 import { SearchBar } from './search/SearchBar'
 import { SearchLayer } from './search/SearchLayer'
@@ -47,16 +55,35 @@ import { createThrottle } from './throttle'
 type LoadState =
   | { status: 'loading' }
   | { status: 'error' }
+  | { status: 'password-cancelled' }
   | { status: 'ready'; pdf: LoadedPdf; initial: ReadingPosition | null; highlights: Highlight[] }
 
 const NO_HIGHLIGHTS: Highlight[] = []
 const ALERT_BURST_WINDOW_MS = 3000
 
+interface PasswordRequest {
+  reason: PasswordReason
+  resolve(password: string | null): void
+  /** Increments per prompt so a wrong password re-mounts the prompt with an empty field. */
+  attempt: number
+}
+
 export function ReaderView({ invertPages }: { invertPages: boolean }) {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
+  const [passwordRequest, setPasswordRequest] = useState<PasswordRequest | null>(null)
+  const passwordAttemptRef = useRef(0)
 
   useEffect(() => {
     let cancelled = false
+    const requestPassword = (reason: PasswordReason) =>
+      new Promise<string | null>((resolve) => {
+        if (cancelled) {
+          resolve(null)
+          return
+        }
+        passwordAttemptRef.current += 1
+        setPasswordRequest({ reason, resolve, attempt: passwordAttemptRef.current })
+      })
     void (async () => {
       const dataPromise = window.api.loadDocumentData().then(
         (data) => data,
@@ -67,12 +94,16 @@ export function ReaderView({ invertPages }: { invertPages: boolean }) {
       )
       try {
         const bytes = await window.api.readDocumentBytes()
-        const pdf = await loadPdf(bytes)
+        const pdf = await loadPdf(bytes, requestPassword)
         const data = await dataPromise
         if (!cancelled) {
           setState({ status: 'ready', pdf, initial: data?.reading ?? null, highlights: data?.highlights ?? NO_HIGHLIGHTS })
         }
       } catch (err) {
+        if (err instanceof PasswordCancelledError) {
+          if (!cancelled) setState({ status: 'password-cancelled' })
+          return
+        }
         console.error('Failed to open document', err)
         if (!cancelled) setState({ status: 'error' })
       }
@@ -82,8 +113,29 @@ export function ReaderView({ invertPages }: { invertPages: boolean }) {
     }
   }, [])
 
-  if (state.status === 'loading') return <div className="status">{t.reader.loading}</div>
+  if (state.status === 'loading') {
+    return (
+      <>
+        <div className="status">{t.reader.loading}</div>
+        {passwordRequest && (
+          <PasswordPrompt
+            key={passwordRequest.attempt}
+            reason={passwordRequest.reason}
+            onSubmit={(password) => {
+              passwordRequest.resolve(password)
+              setPasswordRequest(null)
+            }}
+            onCancel={() => {
+              passwordRequest.resolve(null)
+              setPasswordRequest(null)
+            }}
+          />
+        )}
+      </>
+    )
+  }
   if (state.status === 'error') return <div className="status">{t.reader.loadFailed}</div>
+  if (state.status === 'password-cancelled') return <div className="status">{t.reader.passwordCancelled}</div>
   return <ReaderSurface pdf={state.pdf} initial={state.initial} initialHighlights={state.highlights} invertPages={invertPages} />
 }
 

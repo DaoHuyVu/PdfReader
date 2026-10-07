@@ -13,13 +13,54 @@ export interface LoadedPdf {
   pageSizes: PageSize[]
 }
 
-export async function loadPdf(bytes: Uint8Array): Promise<LoadedPdf> {
-  const doc = await pdfjs.getDocument({ data: bytes, isEvalSupported: false }).promise
-  const pageSizes: PageSize[] = []
-  for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
-    const viewport = (await doc.getPage(pageNumber)).getViewport({ scale: 1 })
-    pageSizes.push({ width: viewport.width, height: viewport.height })
+export type PasswordReason = 'need' | 'incorrect'
+
+/** Thrown by loadPdf when the user cancels the password prompt. */
+export class PasswordCancelledError extends Error {
+  constructor() {
+    super('Password entry cancelled')
+    this.name = 'PasswordCancelledError'
   }
+}
+
+export async function loadPdf(
+  bytes: Uint8Array,
+  requestPassword?: (reason: PasswordReason) => Promise<string | null>
+): Promise<LoadedPdf> {
+  const task = pdfjs.getDocument({ data: bytes, isEvalSupported: false })
+  let cancelled = false
+  if (requestPassword) {
+    task.onPassword = (updatePassword: (password: string) => void, reason: number) => {
+      const why: PasswordReason = reason === pdfjs.PasswordResponses.INCORRECT_PASSWORD ? 'incorrect' : 'need'
+      requestPassword(why).then(
+        (password) => {
+          if (password === null) {
+            cancelled = true
+            void task.destroy()
+          } else {
+            updatePassword(password)
+          }
+        },
+        () => {
+          cancelled = true
+          void task.destroy()
+        }
+      )
+    }
+  }
+  let doc: PDFDocumentProxy
+  try {
+    doc = await task.promise
+  } catch (err) {
+    if (cancelled) throw new PasswordCancelledError()
+    throw err
+  }
+  const pageSizes: PageSize[] = await Promise.all(
+    Array.from({ length: doc.numPages }, async (_, i) => {
+      const viewport = (await doc.getPage(i + 1)).getViewport({ scale: 1 })
+      return { width: viewport.width, height: viewport.height }
+    })
+  )
   return { doc, pageSizes }
 }
 

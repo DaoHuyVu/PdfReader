@@ -651,3 +651,61 @@ html.dark .search-bar input {
 html.dark .search-count {
   color: #a8a8a8;
 }
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+.modal {
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+.modal h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.modal input {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+.modal-error {
+  color: #b3261e;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.modal-actions button {
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 4px;
+  padding: 5px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+.modal-actions button[type='submit'] {
+  background: #e3edff;
+  border-color: #7aa7ff;
+}
+html.dark .modal {
+  background: #2b2d31;
+}
+html.dark .modal input,
+html.dark .modal-actions button {
+  background: #313338;
+  color: #e3e3e3;
+  border-color: #4a4d53;
+}
