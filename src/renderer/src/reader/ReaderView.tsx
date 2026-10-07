@@ -15,9 +15,10 @@ import {
   type ZoomSetting
 } from '../../../shared/documentData'
 import { t } from '../../../shared/strings'
-import { highlightsByPage } from './highlights/geometry'
+import { highlightScrollTop, highlightsByPage } from './highlights/geometry'
 import { HighlightLayer } from './highlights/HighlightLayer'
 import { HighlightMenu } from './highlights/HighlightMenu'
+import { HighlightPanel } from './highlights/HighlightPanel'
 import { hitTestHighlight, isEditableTarget, readSelection, type PendingSelection } from './highlights/selection'
 import { SelectionToolbar } from './highlights/SelectionToolbar'
 import { useHighlights } from './highlights/useHighlights'
@@ -108,6 +109,24 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
   const [menu, setMenu] = useState<{ id: string; anchor: { x: number; y: number } } | null>(null)
   const menuHighlight = menu ? (highlights.find((h) => h.id === menu.id) ?? null) : null
   const closeMenu = useCallback(() => setMenu(null), [])
+
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [focusedId, setFocusedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (focusedId === null) return
+    const timer = setTimeout(() => setFocusedId(null), 1500)
+    return () => clearTimeout(timer)
+  }, [focusedId])
+
+  const goToHighlight = (highlight: Highlight) => {
+    const element = scrollRef.current
+    const top = highlightScrollTop(highlight, boxes, scale)
+    if (!element || top === null) return
+    element.scrollTop = top
+    setFocusedId(highlight.id)
+  }
+
   const byPage = useMemo(() => highlightsByPage(highlights), [highlights])
   const [selection, setSelection] = useState<PendingSelection | null>(null)
 
@@ -192,6 +211,7 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
         if (event.key === '=' || event.key === '+') setZoom(stepZoom(scale, 1))
         else if (event.key === '-') setZoom(stepZoom(scale, -1))
         else if (event.key === '0') setZoom({ mode: 'fit-width' })
+        else if (event.key === 'b' || event.key === 'B') setSidebarOpen((open) => !open)
         else return
         event.preventDefault()
         return
@@ -241,10 +261,19 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
 
   const range = visiblePageRange(scrollTop, viewport.height, boxes)
   const current = currentPageIndex(scrollTop, viewport.height, boxes)
+  const activeId = menu?.id ?? focusedId
 
   return (
     <div className="reader">
       <div className="toolbar">
+        <button
+          className={sidebarOpen ? 'active' : ''}
+          title={t.highlight.togglePanel}
+          aria-pressed={sidebarOpen}
+          onClick={() => setSidebarOpen((open) => !open)}
+        >
+          ☰
+        </button>
         <button title={t.reader.zoomOut} onClick={() => setZoom(stepZoom(scale, -1))}>
           −
         </button>
@@ -260,25 +289,32 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
         </button>
         <span className="page-indicator">{t.reader.page(current + 1, pageCount)}</span>
       </div>
-      <div className="scroll" ref={scrollRef} onScroll={onScroll} onMouseUp={onMouseUp}>
-        <div className="pages" style={{ height: totalHeight(boxes), width: Math.max(viewport.width, contentWidth(boxes)) }}>
-          {boxes.map((box, pageIndex) => (
-            <PdfPage
-              key={pageIndex}
-              doc={pdf.doc}
-              pageIndex={pageIndex}
-              box={box}
-              scale={scale}
-              visible={pageIndex >= range.first && pageIndex <= range.last}
-            >
-              <HighlightLayer
-                highlights={byPage.get(pageIndex) ?? NO_HIGHLIGHTS}
+      <div className="reader-body">
+        {sidebarOpen && (
+          <aside className="sidebar">
+            <HighlightPanel highlights={highlights} activeId={activeId} onSelect={goToHighlight} />
+          </aside>
+        )}
+        <div className="scroll" ref={scrollRef} onScroll={onScroll} onMouseUp={onMouseUp}>
+          <div className="pages" style={{ height: totalHeight(boxes), width: Math.max(viewport.width, contentWidth(boxes)) }}>
+            {boxes.map((box, pageIndex) => (
+              <PdfPage
+                key={pageIndex}
+                doc={pdf.doc}
                 pageIndex={pageIndex}
+                box={box}
                 scale={scale}
-                activeId={menu?.id ?? null}
-              />
-            </PdfPage>
-          ))}
+                visible={pageIndex >= range.first && pageIndex <= range.last}
+              >
+                <HighlightLayer
+                  highlights={byPage.get(pageIndex) ?? NO_HIGHLIGHTS}
+                  pageIndex={pageIndex}
+                  scale={scale}
+                  activeId={activeId}
+                />
+              </PdfPage>
+            ))}
+          </div>
         </div>
       </div>
       {selection && <SelectionToolbar anchor={selection.anchor} onPick={createHighlight} />}
