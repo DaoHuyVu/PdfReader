@@ -39,6 +39,7 @@ import { OutlinePanel } from './outline/OutlinePanel'
 import { outlineScrollTop, type OutlineNode, type OutlineTarget } from './outline/outline'
 import {
   getDocumentTextIndex,
+  hasTextLayer,
   loadOutline,
   loadPdf,
   PasswordCancelledError,
@@ -215,6 +216,21 @@ function ReaderSurface({ pdf, initial, initialHighlights, invertPages }: ReaderS
         console.error('Failed to load outline', err)
         if (!cancelled) setOutline([])
       }
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [pdf.doc])
+
+  const [showNoTextNotice, setShowNoTextNotice] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    hasTextLayer(pdf.doc).then(
+      (hasText) => {
+        if (!cancelled) setShowNoTextNotice(!hasText)
+      },
+      (err) => console.error('Failed to inspect text layer', err)
     )
     return () => {
       cancelled = true
@@ -513,6 +529,12 @@ function ReaderSurface({ pdf, initial, initialHighlights, invertPages }: ReaderS
         </button>
         <span className="page-indicator">{t.reader.page(current + 1, pageCount)}</span>
       </div>
+      {showNoTextNotice && (
+        <div className="notice" role="status">
+          <span>{t.reader.noTextLayer}</span>
+          <button onClick={() => setShowNoTextNotice(false)}>{t.reader.dismiss}</button>
+        </div>
+      )}
       <div className="reader-body">
         {sidebarOpen && (
           <aside className="sidebar">

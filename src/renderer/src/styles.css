@@ -709,3 +709,27 @@ html.dark .modal-actions button {
   color: #e3e3e3;
   border-color: #4a4d53;
 }
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  background: #fff7d6;
+  border-bottom: 1px solid #ecd27a;
+}
+.notice button {
+  border: 1px solid #d9c26a;
+  background: transparent;
+  border-radius: 4px;
+  padding: 2px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+html.dark .notice {
+  background: #3b3420;
+  border-color: #7a6a2c;
+}
+html.dark .notice button {
+  color: #e3e3e3;
+}

@@ -88,6 +88,16 @@ export async function loadPageTextRuns(doc: PDFDocumentProxy, pageIndex: number)
   return runs
 }
 
+/** True when any of the first `maxPages` pages has selectable, non-blank text. */
+export async function hasTextLayer(doc: PDFDocumentProxy, maxPages = 5): Promise<boolean> {
+  const count = Math.min(doc.numPages, maxPages)
+  for (let pageNumber = 1; pageNumber <= count; pageNumber++) {
+    const content = await (await doc.getPage(pageNumber)).getTextContent()
+    if (content.items.some((item) => 'str' in item && item.str.trim() !== '')) return true
+  }
+  return false
+}
+
 const textIndexCache = new WeakMap<PDFDocumentProxy, Promise<TextIndex>>()
 
 /** Folded text index of the whole Document, built once per loaded document. */
