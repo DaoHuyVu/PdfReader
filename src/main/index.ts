@@ -32,7 +32,6 @@ async function openPath(path: string): Promise<OpenResult> {
   }
   try {
     const fingerprint = await computeFingerprint(path)
-    await recent.add({ fingerprint, path, openedAt: Date.now() })
     if (!windows.focusDocument(fingerprint)) {
       windows.openDocument(
         { kind: 'document', path, fileName: basename(path), fingerprint },
@@ -41,6 +40,11 @@ async function openPath(path: string): Promise<OpenResult> {
           onClosed: () => void saver.flush(fingerprint).catch(logSaveError)
         }
       )
+    }
+    try {
+      await recent.add({ fingerprint, path, openedAt: Date.now() })
+    } catch (err) {
+      console.error('Failed to update recent documents', err)
     }
     return { ok: true }
   } catch (err) {
@@ -71,12 +75,15 @@ async function listRecentViews(): Promise<RecentView[]> {
         () => true,
         () => false
       )
-      const data = await store.load(entry.fingerprint)
+      const data = await store.load(entry.fingerprint).catch((err) => {
+        console.error('Failed to load document data', entry.fingerprint, err)
+        return null
+      })
       return {
         ...entry,
         fileName: basename(entry.path),
         exists,
-        progress: readingProgress(data.reading, data.pageCount)
+        progress: data ? readingProgress(data.reading, data.pageCount) : null
       }
     })
   )

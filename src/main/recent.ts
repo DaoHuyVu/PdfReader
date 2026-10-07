@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import { mkdir, readFile, rename, writeFile } from 'fs/promises'
 import { dirname } from 'path'
 import type { Fingerprint } from '../shared/documentData'
@@ -29,6 +30,8 @@ function isRecentEntry(value: unknown): value is RecentEntry {
 
 /** Recent Documents for this machine only; paths differ between machines. */
 export class RecentStore {
+  private queue: Promise<unknown> = Promise.resolve()
+
   constructor(private readonly filePath: string) {}
 
   async list(): Promise<RecentEntry[]> {
@@ -40,10 +43,17 @@ export class RecentStore {
     }
   }
 
+  /** Serialized so concurrent opens cannot collide or drop entries. A failed add does not block later ones. */
   async add(entry: RecentEntry): Promise<void> {
+    const run = this.queue.then(() => this.addUnlocked(entry), () => this.addUnlocked(entry))
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  private async addUnlocked(entry: RecentEntry): Promise<void> {
     const next = addRecent(await this.list(), entry)
     await mkdir(dirname(this.filePath), { recursive: true })
-    const tempPath = `${this.filePath}.tmp`
+    const tempPath = `${this.filePath}.${randomUUID()}.tmp`
     await writeFile(tempPath, JSON.stringify(next, null, 2), 'utf8')
     await rename(tempPath, this.filePath)
   }

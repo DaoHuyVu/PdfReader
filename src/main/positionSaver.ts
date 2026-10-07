@@ -9,6 +9,7 @@ export interface PendingPosition {
 export class PositionSaver {
   private readonly pending = new Map<Fingerprint, PendingPosition>()
   private readonly timers = new Map<Fingerprint, ReturnType<typeof setTimeout>>()
+  private readonly inFlight = new Set<Promise<void>>()
 
   constructor(
     private readonly write: (fingerprint: Fingerprint, position: PendingPosition) => Promise<void>,
@@ -34,14 +35,22 @@ export class PositionSaver {
     const position = this.pending.get(fingerprint)
     if (!position) return
     this.pending.delete(fingerprint)
-    await this.write(fingerprint, position)
+    const writePromise = this.write(fingerprint, position)
+    this.inFlight.add(writePromise)
+    try {
+      await writePromise
+    } finally {
+      this.inFlight.delete(writePromise)
+    }
   }
 
   async flushAll(): Promise<void> {
-    await Promise.all([...this.pending.keys()].map((fingerprint) => this.flush(fingerprint)))
+    const started = [...this.pending.keys()].map((fingerprint) => this.flush(fingerprint))
+    const inFlightSnapshot = [...this.inFlight]
+    await Promise.all([Promise.all(started), Promise.allSettled(inFlightSnapshot)])
   }
 
   hasPending(): boolean {
-    return this.pending.size > 0
+    return this.pending.size > 0 || this.inFlight.size > 0
   }
 }

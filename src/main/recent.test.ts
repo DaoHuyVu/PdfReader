@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'fs/promises'
+import { mkdtemp, readdir, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -64,5 +64,17 @@ describe('RecentStore', () => {
   it('drops malformed entries', async () => {
     await writeFile(join(dir, 'recent.json'), JSON.stringify([entry('a', 'C:\\a.pdf'), { path: 3 }]))
     expect(await new RecentStore(join(dir, 'recent.json')).list()).toEqual([entry('a', 'C:\\a.pdf')])
+  })
+
+  it('keeps all entries from ten concurrent adds and leaves no temp file', async () => {
+    const path = join(dir, 'recent.json')
+    const store = new RecentStore(path)
+    await Promise.all(
+      Array.from({ length: 10 }, (_, i) => store.add(entry(`fp${i}`, `C:\\${i}.pdf`, i)))
+    )
+    const list = await store.list()
+    expect(list).toHaveLength(10)
+    const names = await readdir(dir)
+    expect(names.some((n) => n.includes('.tmp'))).toBe(false)
   })
 })

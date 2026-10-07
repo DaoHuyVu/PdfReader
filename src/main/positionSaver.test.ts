@@ -72,4 +72,55 @@ describe('PositionSaver', () => {
     expect(error).toHaveBeenCalled()
     error.mockRestore()
   })
+
+  it('hasPending stays true while a write started by flush() is still running', async () => {
+    let resolveWrite: () => void = () => undefined
+    const write = vi.fn().mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveWrite = resolve
+      })
+    )
+    const saver = new PositionSaver(write)
+    saver.report('fp', position(1))
+    const flushPromise = saver.flush('fp')
+    expect(saver.hasPending()).toBe(true)
+    resolveWrite()
+    await flushPromise
+    expect(saver.hasPending()).toBe(false)
+  })
+
+  it('flushAll does not resolve until a write started earlier by flush() resolves', async () => {
+    let resolveWrite: () => void = () => undefined
+    const write = vi.fn().mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveWrite = resolve
+      })
+    )
+    const saver = new PositionSaver(write)
+    saver.report('fp', position(1))
+    const flushPromise = saver.flush('fp')
+
+    let flushAllResolved = false
+    const flushAllPromise = saver.flushAll().then(() => {
+      flushAllResolved = true
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(flushAllResolved).toBe(false)
+
+    resolveWrite()
+    await flushPromise
+    await flushAllPromise
+    expect(flushAllResolved).toBe(true)
+  })
+
+  it('hasPending is false after a failed write', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const saver = new PositionSaver(vi.fn().mockRejectedValue(new Error('disk full')))
+    saver.report('fp', position(1))
+    await saver.flush('fp').catch(() => undefined)
+    expect(saver.hasPending()).toBe(false)
+    error.mockRestore()
+  })
 })

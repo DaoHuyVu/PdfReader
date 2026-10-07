@@ -9,7 +9,20 @@ import {
   type Fingerprint
 } from '../shared/documentData'
 
-const RETRYABLE_RENAME_CODES = new Set(['EPERM', 'EBUSY', 'EACCES'])
+const RETRYABLE_CODES = new Set(['EPERM', 'EBUSY', 'EACCES'])
+
+/** Retries `operation` on EPERM/EBUSY/EACCES (OneDrive file locks); other errors rethrow immediately. */
+export async function withRetry<T>(operation: () => Promise<T>, attempts = 5): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await operation()
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code ?? ''
+      if (attempt >= attempts || !RETRYABLE_CODES.has(code)) throw err
+      await new Promise((resolve) => setTimeout(resolve, 50 * attempt))
+    }
+  }
+}
 
 /** One JSON file per Document in the Data Folder. See docs/adr/0002. */
 export class DocumentStore {
@@ -57,7 +70,7 @@ export class DocumentStore {
       try {
         data = parseDocumentData(JSON.parse(main))
       } catch {
-        await rename(mainPath, join(this.dir, `${fingerprint}.corrupt-${this.now()}.bak`))
+        await withRetry(() => rename(mainPath, join(this.dir, `${fingerprint}.corrupt-${this.now()}.bak`)))
       }
     }
 
@@ -77,7 +90,11 @@ export class DocumentStore {
 
     if (mergedCopies.length > 0) {
       await this.writeAtomic(fingerprint, data)
-      for (const copyPath of mergedCopies) await unlink(copyPath)
+      for (const copyPath of mergedCopies) {
+        await withRetry(() => unlink(copyPath)).catch((err) => {
+          console.error('Failed to delete merged conflict copy', copyPath, err)
+        })
+      }
     }
     return data
   }
@@ -87,7 +104,7 @@ export class DocumentStore {
     const tempPath = join(this.dir, `${fingerprint}.json.${randomUUID()}.tmp`)
     await writeFile(tempPath, JSON.stringify(data, null, 2), 'utf8')
     try {
-      await renameWithRetry(tempPath, this.mainPath(fingerprint))
+      await withRetry(() => rename(tempPath, this.mainPath(fingerprint)))
     } catch (err) {
       await unlink(tempPath).catch(() => undefined)
       throw err
@@ -101,18 +118,5 @@ async function readIfExists(path: string): Promise<string | null> {
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
     throw err
-  }
-}
-
-async function renameWithRetry(from: string, to: string, attempts = 5): Promise<void> {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      await rename(from, to)
-      return
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code ?? ''
-      if (attempt >= attempts || !RETRYABLE_RENAME_CODES.has(code)) throw err
-      await new Promise((resolve) => setTimeout(resolve, 50 * attempt))
-    }
   }
 }

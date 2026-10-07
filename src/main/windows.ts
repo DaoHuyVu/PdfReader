@@ -42,7 +42,7 @@ export class AppWindows {
     this.documentWindows.set(context.fingerprint, win)
     win.on('blur', hooks.onBlur)
     win.on('closed', () => {
-      this.documentWindows.delete(context.fingerprint)
+      if (this.documentWindows.get(context.fingerprint) === win) this.documentWindows.delete(context.fingerprint)
       hooks.onClosed()
     })
   }

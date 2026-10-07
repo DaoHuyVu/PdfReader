@@ -1,9 +1,15 @@
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { emptyDocumentData, parseDocumentData, type Highlight, type ReadingPosition } from '../shared/documentData'
-import { DocumentStore } from './documentStore'
+import { DocumentStore, withRetry } from './documentStore'
+
+function errnoError(code: string): NodeJS.ErrnoException {
+  const err = new Error(code) as NodeJS.ErrnoException
+  err.code = code
+  return err
+}
 
 const FP = 'a'.repeat(64)
 let dir: string
@@ -104,5 +110,43 @@ describe('DocumentStore', () => {
     await store.update(other, (d) => ({ ...d, pageCount: 7 }))
     await store.update(FP, (d) => ({ ...d, pageCount: 3 }))
     expect((await store.load(other)).pageCount).toBe(7)
+  })
+})
+
+describe('withRetry', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('succeeds after two EBUSY failures and calls the operation 3 times', async () => {
+    const op = vi
+      .fn()
+      .mockRejectedValueOnce(errnoError('EBUSY'))
+      .mockRejectedValueOnce(errnoError('EBUSY'))
+      .mockResolvedValueOnce('ok')
+
+    const promise = withRetry(op)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(await promise).toBe('ok')
+    expect(op).toHaveBeenCalledTimes(3)
+  })
+
+  it('rethrows a non-retryable error after exactly 1 call', async () => {
+    const op = vi.fn().mockRejectedValue(errnoError('ENOENT'))
+    await expect(withRetry(op)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(op).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives up after `attempts` calls on a persistent EPERM and rethrows it', async () => {
+    const op = vi.fn().mockRejectedValue(errnoError('EPERM'))
+    const promise = withRetry(op, 3)
+    const assertion = expect(promise).rejects.toMatchObject({ code: 'EPERM' })
+    await vi.advanceTimersByTimeAsync(10000)
+    await assertion
+    expect(op).toHaveBeenCalledTimes(3)
   })
 })
