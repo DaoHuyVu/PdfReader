@@ -215,10 +215,10 @@ body {
   inset: 0;
   z-index: 1;
   pointer-events: none;
+  mix-blend-mode: multiply;
 }
 .highlight-rect {
   position: absolute;
-  mix-blend-mode: multiply;
   border-radius: 2px;
 }
 .highlight-rect.active {

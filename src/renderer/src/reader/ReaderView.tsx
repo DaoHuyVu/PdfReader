@@ -134,6 +134,12 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
     }
   }, [zoom, report])
 
+  // A scale change (zoom or a resize in a fit mode) rebuilds the text layer's DOM, destroying
+  // the window selection and leaving any open toolbar anchored to a stale position.
+  useEffect(() => {
+    setSelection(null)
+  }, [scale])
+
   useEffect(() => {
     const flush = () => report.flush()
     window.addEventListener('blur', flush)

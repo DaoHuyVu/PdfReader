@@ -1,6 +1,10 @@
 import type { Highlight, HighlightPart } from '../../../../shared/documentData'
 import { clientRectsToParts, highlightAt, type PageFrame } from './geometry'
 
+// Matches geometry.ts's MIN_SIZE: below this, a rect is a collapsed/degenerate selection edge,
+// not a real glyph box, and must not be used to anchor the toolbar.
+const MIN_ANCHOR_RECT_SIZE = 0.5
+
 export interface PendingSelection {
   parts: HighlightPart[]
   text: string
@@ -51,8 +55,11 @@ export function readSelection(container: HTMLElement, scale: number): PendingSel
   const parts = clientRectsToParts(clientRects, pageFrames(container), scale)
   const text = selection.toString().replace(/\s+/g, ' ').trim()
   if (parts.length === 0 || text === '') return null
-  const last = clientRects[clientRects.length - 1]
-  return { parts, text, anchor: { x: last.right, y: last.bottom } }
+  const anchorRect = [...clientRects]
+    .reverse()
+    .find((r) => r.width >= MIN_ANCHOR_RECT_SIZE && r.height >= MIN_ANCHOR_RECT_SIZE)
+  if (!anchorRect) return null
+  return { parts, text, anchor: { x: anchorRect.right, y: anchorRect.bottom } }
 }
 
 /** The Highlight under a click, if the click landed on a page. */
