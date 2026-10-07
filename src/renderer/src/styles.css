@@ -73,3 +73,93 @@ body {
 .page canvas {
   display: block;
 }
+
+.home {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 24px;
+}
+.home-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.home-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+}
+.home-header button {
+  border: 1px solid #7aa7ff;
+  background: #e3edff;
+  border-radius: 4px;
+  padding: 6px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+.home-empty {
+  color: #666;
+}
+.recent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.recent-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'name progress'
+    'path progress';
+  gap: 2px 16px;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 10px 14px;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+.recent-item:hover {
+  border-color: #7aa7ff;
+}
+.recent-item.missing {
+  opacity: 0.55;
+}
+.recent-name {
+  grid-area: name;
+  font-weight: 600;
+}
+.recent-path {
+  grid-area: path;
+  color: #666;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-progress {
+  grid-area: progress;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.progress-bar {
+  width: 120px;
+  height: 6px;
+  background: #e6e6e6;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-fill {
+  display: block;
+  height: 100%;
+  background: #4a7fe0;
+}
+.progress-label {
+  min-width: 56px;
+  text-align: right;
+  color: #555;
+  font-variant-numeric: tabular-nums;
+}

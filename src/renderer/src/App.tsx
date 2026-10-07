@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { WindowContext } from '../../shared/ipc'
+import { HomeView } from './home/HomeView'
 import { ReaderView } from './reader/ReaderView'
 
 export function App() {
@@ -8,6 +9,5 @@ export function App() {
     void window.api.getContext().then(setContext)
   }, [])
   if (!context) return null
-  if (context.kind === 'document') return <ReaderView />
-  return <pre>{JSON.stringify(context, null, 2)}</pre>
+  return context.kind === 'document' ? <ReaderView /> : <HomeView />
 }
