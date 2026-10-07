@@ -605,3 +605,49 @@ html.dark .swatch.selected {
 html.dark .sidebar-tabs {
   border-color: #3d3f44;
 }
+
+/* Search in the Document. */
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.search-bar input {
+  font: inherit;
+  width: 220px;
+  padding: 3px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+.search-count {
+  min-width: 70px;
+  color: #666;
+  font-variant-numeric: tabular-nums;
+}
+.search-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+.reader.inverted .search-layer {
+  mix-blend-mode: screen;
+}
+.search-hit {
+  position: absolute;
+  background: rgba(255, 150, 0, 0.3);
+  border-radius: 2px;
+}
+.search-hit.current {
+  background: rgba(255, 110, 0, 0.6);
+  outline: 2px solid rgba(220, 90, 0, 0.9);
+}
+html.dark .search-bar input {
+  background: #313338;
+  color: #e3e3e3;
+  border-color: #4a4d53;
+}
+html.dark .search-count {
+  color: #a8a8a8;
+}

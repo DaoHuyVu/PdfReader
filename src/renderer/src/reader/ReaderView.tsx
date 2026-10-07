@@ -39,6 +39,9 @@ import { OutlinePanel } from './outline/OutlinePanel'
 import { outlineScrollTop, type OutlineNode, type OutlineTarget } from './outline/outline'
 import { getDocumentTextIndex, loadOutline, loadPdf, type LoadedPdf } from './pdf'
 import { PdfPage } from './PdfPage'
+import { SearchBar } from './search/SearchBar'
+import { SearchLayer } from './search/SearchLayer'
+import { firstHitFrom, hitsByPage, hitScrollTop, searchDocument, stepHit, type SearchHit } from './search/search'
 import { createThrottle } from './throttle'
 
 type LoadState =
@@ -242,6 +245,68 @@ function ReaderSurface({ pdf, initial, initialHighlights, invertPages }: ReaderS
     }
   }, [report])
 
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchFocusKey, setSearchFocusKey] = useState(0)
+  const [query, setQuery] = useState('')
+  const [hits, setHits] = useState<SearchHit[]>([])
+  const [currentHit, setCurrentHit] = useState(-1)
+  const [searchStatus, setSearchStatus] = useState<'idle' | 'searching' | 'done'>('idle')
+  const hitEntries = useMemo(() => hitsByPage(hits), [hits])
+  const layoutRef = useRef({ boxes, scale })
+  layoutRef.current = { boxes, scale }
+
+  useEffect(() => {
+    if (!searchOpen || query.trim() === '') {
+      setHits([])
+      setCurrentHit(-1)
+      setSearchStatus('idle')
+      return
+    }
+    let cancelled = false
+    setSearchStatus('searching')
+    const timer = setTimeout(() => {
+      getDocumentTextIndex(pdf.doc)
+        .then((index) => {
+          if (cancelled) return
+          const found = searchDocument(index, query)
+          setHits(found)
+          setCurrentHit(firstHitFrom(found, anchorRef.current.pageIndex))
+          setSearchStatus('done')
+        })
+        .catch((err) => {
+          console.error('Search failed', err)
+          if (cancelled) return
+          setHits([])
+          setCurrentHit(-1)
+          setSearchStatus('done')
+        })
+    }, 200)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [searchOpen, query, pdf.doc])
+
+  // Bring the current hit into view whenever it changes.
+  useEffect(() => {
+    const hit = hits[currentHit]
+    const element = scrollRef.current
+    if (!hit || !element) return
+    const top = hitScrollTop(hit, layoutRef.current.boxes, layoutRef.current.scale)
+    if (top !== null) element.scrollTop = top
+  }, [hits, currentHit])
+
+  const hitsCountRef = useRef(0)
+  hitsCountRef.current = hits.length
+  const stepSearch = useCallback((direction: 1 | -1) => {
+    setCurrentHit((current) => stepHit(current, hitsCountRef.current, direction))
+  }, [])
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false)
+    setQuery('')
+  }, [])
+
   const clearSelection = useCallback(() => {
     window.getSelection()?.removeAllRanges()
     setSelection(null)
@@ -272,8 +337,22 @@ function ReaderSurface({ pdf, initial, initialHighlights, invertPages }: ReaderS
         else if (event.key === '-') setZoom(stepZoom(scale, -1))
         else if (event.key === '0') setZoom({ mode: 'fit-width' })
         else if (event.key === 'b' || event.key === 'B') setSidebarOpen((open) => !open)
+        else if (event.key === 'f' || event.key === 'F') {
+          setSearchOpen(true)
+          setSearchFocusKey((key) => key + 1)
+        }
         else return
         event.preventDefault()
+        return
+      }
+      if (event.key === 'F3' && searchOpen) {
+        event.preventDefault()
+        stepSearch(event.shiftKey ? -1 : 1)
+        return
+      }
+      // The search box handles its own Escape; other editable targets (e.g. the note editor) keep theirs.
+      if (event.key === 'Escape' && searchOpen && !selection && !menu && !isEditableTarget(event.target)) {
+        closeSearch()
         return
       }
       if (event.altKey || event.metaKey || isEditableTarget(event.target) || !selection) return
@@ -287,7 +366,7 @@ function ReaderSurface({ pdf, initial, initialHighlights, invertPages }: ReaderS
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [scale, selection, createHighlight, clearSelection])
+  }, [scale, selection, menu, searchOpen, stepSearch, closeSearch, createHighlight, clearSelection])
 
   const onScroll = () => {
     const element = scrollRef.current
@@ -348,6 +427,28 @@ function ReaderSurface({ pdf, initial, initialHighlights, invertPages }: ReaderS
         <button className={zoom.mode === 'fit-page' ? 'active' : ''} onClick={() => setZoom({ mode: 'fit-page' })}>
           {t.reader.fitPage}
         </button>
+        {searchOpen ? (
+          <SearchBar
+            query={query}
+            onQuery={setQuery}
+            status={searchStatus}
+            count={hits.length}
+            current={currentHit}
+            focusKey={searchFocusKey}
+            onStep={stepSearch}
+            onClose={closeSearch}
+          />
+        ) : (
+          <button
+            title={t.search.open}
+            onClick={() => {
+              setSearchOpen(true)
+              setSearchFocusKey((key) => key + 1)
+            }}
+          >
+            🔍
+          </button>
+        )}
         <button
           className={invertPages ? 'active' : ''}
           title={t.reader.invertPages}
@@ -401,12 +502,17 @@ function ReaderSurface({ pdf, initial, initialHighlights, invertPages }: ReaderS
                 scale={scale}
                 visible={pageIndex >= range.first && pageIndex <= range.last}
               >
-                <HighlightLayer
-                  highlights={byPage.get(pageIndex) ?? NO_HIGHLIGHTS}
-                  pageIndex={pageIndex}
-                  scale={scale}
-                  activeId={activeId}
-                />
+                <>
+                  <HighlightLayer
+                    highlights={byPage.get(pageIndex) ?? NO_HIGHLIGHTS}
+                    pageIndex={pageIndex}
+                    scale={scale}
+                    activeId={activeId}
+                  />
+                  {hitEntries.has(pageIndex) && (
+                    <SearchLayer entries={hitEntries.get(pageIndex)!} scale={scale} currentHit={currentHit} />
+                  )}
+                </>
               </PdfPage>
             ))}
           </div>
