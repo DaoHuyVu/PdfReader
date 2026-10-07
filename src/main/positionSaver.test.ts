@@ -1,0 +1,75 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { PositionSaver, type PendingPosition } from './positionSaver'
+
+function position(pageIndex: number): PendingPosition {
+  return { pageCount: 10, reading: { pageIndex, offsetRatio: 0, zoom: { mode: 'fit-width' }, updatedAt: pageIndex } }
+}
+
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+describe('PositionSaver', () => {
+  it('writes the latest position 3 s after the last report', async () => {
+    const write = vi.fn().mockResolvedValue(undefined)
+    const saver = new PositionSaver(write)
+    saver.report('fp', position(1))
+    await vi.advanceTimersByTimeAsync(2000)
+    saver.report('fp', position(2))
+    await vi.advanceTimersByTimeAsync(2999)
+    expect(write).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(write).toHaveBeenCalledTimes(1)
+    expect(write).toHaveBeenCalledWith('fp', position(2))
+  })
+
+  it('debounces each Document separately', async () => {
+    const write = vi.fn().mockResolvedValue(undefined)
+    const saver = new PositionSaver(write)
+    saver.report('a', position(1))
+    saver.report('b', position(2))
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(write).toHaveBeenCalledWith('a', position(1))
+    expect(write).toHaveBeenCalledWith('b', position(2))
+  })
+
+  it('flush writes immediately and cancels the timer', async () => {
+    const write = vi.fn().mockResolvedValue(undefined)
+    const saver = new PositionSaver(write)
+    saver.report('fp', position(5))
+    await saver.flush('fp')
+    expect(write).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(write).toHaveBeenCalledTimes(1)
+  })
+
+  it('flush does nothing when nothing is pending', async () => {
+    const write = vi.fn().mockResolvedValue(undefined)
+    await new PositionSaver(write).flush('fp')
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it('flushAll writes every pending Document and clears hasPending', async () => {
+    const write = vi.fn().mockResolvedValue(undefined)
+    const saver = new PositionSaver(write)
+    saver.report('a', position(1))
+    saver.report('b', position(2))
+    expect(saver.hasPending()).toBe(true)
+    await saver.flushAll()
+    expect(write).toHaveBeenCalledTimes(2)
+    expect(saver.hasPending()).toBe(false)
+  })
+
+  it('logs instead of throwing when a timed write fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const saver = new PositionSaver(vi.fn().mockRejectedValue(new Error('disk full')))
+    saver.report('fp', position(1))
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(error).toHaveBeenCalled()
+    error.mockRestore()
+  })
+})
