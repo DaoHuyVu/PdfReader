@@ -47,7 +47,7 @@ type LoadState =
 const NO_HIGHLIGHTS: Highlight[] = []
 const ALERT_BURST_WINDOW_MS = 3000
 
-export function ReaderView() {
+export function ReaderView({ invertPages }: { invertPages: boolean }) {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
 
   useEffect(() => {
@@ -79,16 +79,17 @@ export function ReaderView() {
 
   if (state.status === 'loading') return <div className="status">{t.reader.loading}</div>
   if (state.status === 'error') return <div className="status">{t.reader.loadFailed}</div>
-  return <ReaderSurface pdf={state.pdf} initial={state.initial} initialHighlights={state.highlights} />
+  return <ReaderSurface pdf={state.pdf} initial={state.initial} initialHighlights={state.highlights} invertPages={invertPages} />
 }
 
 interface ReaderSurfaceProps {
   pdf: LoadedPdf
   initial: ReadingPosition | null
   initialHighlights: Highlight[]
+  invertPages: boolean
 }
 
-function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) {
+function ReaderSurface({ pdf, initial, initialHighlights, invertPages }: ReaderSurfaceProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [viewport, setViewport] = useState({ width: 0, height: 0 })
   const [scrollTop, setScrollTop] = useState(0)
@@ -298,7 +299,7 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
   const activeId = menu?.id ?? focusedId
 
   return (
-    <div className="reader">
+    <div className={invertPages ? 'reader inverted' : 'reader'}>
       <div className="toolbar">
         <button
           className={sidebarOpen ? 'active' : ''}
@@ -320,6 +321,16 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
         </button>
         <button className={zoom.mode === 'fit-page' ? 'active' : ''} onClick={() => setZoom({ mode: 'fit-page' })}>
           {t.reader.fitPage}
+        </button>
+        <button
+          className={invertPages ? 'active' : ''}
+          title={t.reader.invertPages}
+          aria-pressed={invertPages}
+          onClick={() =>
+            window.api.updateSettings({ invertPages: !invertPages }).catch((err) => console.error(err))
+          }
+        >
+          ◐
         </button>
         <span className="page-indicator">{t.reader.page(current + 1, pageCount)}</span>
       </div>

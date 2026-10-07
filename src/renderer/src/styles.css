@@ -391,3 +391,152 @@ body {
   color: #888;
   font-size: 12px;
 }
+
+/* Page inversion (night reading). */
+.reader.inverted .page {
+  background: #111;
+}
+.reader.inverted .page canvas {
+  filter: invert(1) hue-rotate(180deg);
+}
+.reader.inverted .highlight-layer {
+  mix-blend-mode: screen;
+}
+
+/* Settings screen. */
+.home-actions {
+  display: flex;
+  gap: 8px;
+}
+.home-header button.secondary,
+.settings-actions button,
+.settings-restart button {
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 4px;
+  padding: 6px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+.link-button {
+  border: none;
+  background: none;
+  color: #2f62c8;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.settings h1 {
+  font-size: 20px;
+  font-weight: 600;
+}
+.settings-section {
+  margin-bottom: 28px;
+}
+.settings-section h2 {
+  font-size: 15px;
+  margin: 0 0 6px;
+}
+.settings-help,
+.settings-source {
+  color: #666;
+  margin: 4px 0;
+}
+.settings-path {
+  display: block;
+  padding: 6px 8px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  word-break: break-all;
+}
+.settings-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.settings-restart {
+  margin-top: 10px;
+  padding: 10px;
+  background: #fff7d6;
+  border: 1px solid #ecd27a;
+  border-radius: 6px;
+}
+.settings-radios {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+.settings-check {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Dark theme: applied when <html> has class "dark" (see useAppliedTheme). */
+html.dark {
+  color-scheme: dark;
+}
+html.dark body {
+  background: #1e1f22;
+  color: #e3e3e3;
+}
+html.dark .status,
+html.dark .home-empty,
+html.dark .recent-path,
+html.dark .progress-label,
+html.dark .page-indicator,
+html.dark .settings-help,
+html.dark .settings-source,
+html.dark .panel-meta,
+html.dark .panel-empty,
+html.dark .panel-note,
+html.dark .menu-note {
+  color: #a8a8a8;
+}
+html.dark .toolbar,
+html.dark .sidebar {
+  background: #2b2d31;
+  border-color: #3d3f44;
+}
+html.dark .scroll {
+  background: #18191b;
+}
+html.dark .toolbar button,
+html.dark .menu-actions button,
+html.dark .home-header button.secondary,
+html.dark .settings-actions button,
+html.dark .settings-restart button,
+html.dark .panel-search,
+html.dark .menu-note textarea,
+html.dark .recent-item,
+html.dark .panel-item,
+html.dark .settings-path {
+  background: #313338;
+  color: #e3e3e3;
+  border-color: #4a4d53;
+}
+html.dark .toolbar button.active,
+html.dark .home-header button:not(.secondary) {
+  background: #2c3e66;
+  border-color: #4f73c2;
+  color: #e3e3e3;
+}
+html.dark .selection-toolbar,
+html.dark .highlight-menu {
+  background: #2b2d31;
+  border-color: #4a4d53;
+}
+html.dark .progress-bar {
+  background: #3d3f44;
+}
+html.dark .settings-restart {
+  background: #3b3420;
+  border-color: #7a6a2c;
+}
+html.dark .link-button {
+  color: #8fb0ff;
+}
+html.dark .swatch.selected {
+  outline-color: #e3e3e3;
+}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { RecentView } from '../../../shared/ipc'
 import { t } from '../../../shared/strings'
 
-export function HomeView() {
+export function HomeView({ onOpenSettings }: { onOpenSettings(): void }) {
   const [items, setItems] = useState<RecentView[] | null>(null)
 
   const refresh = useCallback(() => {
@@ -27,7 +27,12 @@ export function HomeView() {
     <div className="home">
       <header className="home-header">
         <h1>{t.home.title}</h1>
-        <button onClick={() => void window.api.openFileDialog()}>{t.home.open}</button>
+        <div className="home-actions">
+          <button className="secondary" onClick={onOpenSettings}>
+            {t.settings.open}
+          </button>
+          <button onClick={() => void window.api.openFileDialog()}>{t.home.open}</button>
+        </div>
       </header>
       {items !== null && items.length === 0 && <p className="home-empty">{t.home.empty}</p>}
       <ul className="recent-list">
