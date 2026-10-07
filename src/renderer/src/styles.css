@@ -247,3 +247,48 @@ body {
   outline: 2px solid #1f1f1f;
   outline-offset: 1px;
 }
+.highlight-menu {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+}
+.menu-swatches {
+  display: flex;
+  gap: 6px;
+}
+.menu-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #555;
+}
+.menu-note textarea {
+  font: inherit;
+  resize: vertical;
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+.menu-actions {
+  display: flex;
+  justify-content: space-between;
+}
+.menu-actions button {
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+.menu-actions button.danger {
+  color: #b3261e;
+  border-color: #e6b0ab;
+}

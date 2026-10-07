@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent
+} from 'react'
 import {
   HIGHLIGHT_COLORS,
   type Highlight,
@@ -9,7 +17,8 @@ import {
 import { t } from '../../../shared/strings'
 import { highlightsByPage } from './highlights/geometry'
 import { HighlightLayer } from './highlights/HighlightLayer'
-import { isEditableTarget, readSelection, type PendingSelection } from './highlights/selection'
+import { HighlightMenu } from './highlights/HighlightMenu'
+import { hitTestHighlight, isEditableTarget, readSelection, type PendingSelection } from './highlights/selection'
 import { SelectionToolbar } from './highlights/SelectionToolbar'
 import { useHighlights } from './highlights/useHighlights'
 import {
@@ -95,7 +104,10 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
   const initialZoomRef = useRef(zoom)
 
   const onHighlightError = useCallback(() => alert(t.highlight.saveFailed), [])
-  const { highlights, save } = useHighlights(initialHighlights, onHighlightError)
+  const { highlights, save, remove } = useHighlights(initialHighlights, onHighlightError)
+  const [menu, setMenu] = useState<{ id: string; anchor: { x: number; y: number } } | null>(null)
+  const menuHighlight = menu ? (highlights.find((h) => h.id === menu.id) ?? null) : null
+  const closeMenu = useCallback(() => setMenu(null), [])
   const byPage = useMemo(() => highlightsByPage(highlights), [highlights])
   const [selection, setSelection] = useState<PendingSelection | null>(null)
 
@@ -214,10 +226,17 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
     report.call({ ...position, zoom: zoomRef.current, updatedAt: Date.now() })
   }
 
-  const onMouseUp = () => {
+  const onMouseUp = (event: ReactMouseEvent) => {
     const element = scrollRef.current
     if (!element) return
-    setSelection(readSelection(element, scale))
+    const pending = readSelection(element, scale)
+    setSelection(pending)
+    if (pending) {
+      setMenu(null)
+      return
+    }
+    const hit = hitTestHighlight(event.target, event.clientX, event.clientY, highlights, scale)
+    setMenu(hit ? { id: hit.id, anchor: { x: event.clientX, y: event.clientY } } : null)
   }
 
   const range = visiblePageRange(scrollTop, viewport.height, boxes)
@@ -256,13 +275,26 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
                 highlights={byPage.get(pageIndex) ?? NO_HIGHLIGHTS}
                 pageIndex={pageIndex}
                 scale={scale}
-                activeId={null}
+                activeId={menu?.id ?? null}
               />
             </PdfPage>
           ))}
         </div>
       </div>
       {selection && <SelectionToolbar anchor={selection.anchor} onPick={createHighlight} />}
+      {menu && menuHighlight && (
+        <HighlightMenu
+          key={menuHighlight.id}
+          highlight={menuHighlight}
+          anchor={menu.anchor}
+          onChange={save}
+          onDelete={() => {
+            remove(menuHighlight.id)
+            closeMenu()
+          }}
+          onClose={closeMenu}
+        />
+      )}
     </div>
   )
 }
