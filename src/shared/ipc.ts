@@ -1,15 +1,23 @@
 import type { DocumentData, Fingerprint, Highlight, ReadingPosition } from './documentData'
+import type { DataFolderInfo, Settings } from './settings'
 
 export const IPC = {
   getContext: 'window:get-context',
   readDocumentBytes: 'document:read-bytes',
   loadDocumentData: 'document:load-data',
   reportReadingPosition: 'document:report-reading-position',
+  flushReadingPosition: 'document:flush-reading-position',
   saveHighlight: 'document:save-highlight',
   deleteHighlight: 'document:delete-highlight',
   openFileDialog: 'app:open-file-dialog',
   openPath: 'app:open-path',
-  listRecent: 'app:list-recent'
+  listRecent: 'app:list-recent',
+  getSettings: 'settings:get',
+  updateSettings: 'settings:update',
+  settingsChanged: 'settings:changed',
+  getDataFolderInfo: 'settings:data-folder',
+  chooseDataFolder: 'settings:choose-data-folder',
+  relaunchApp: 'app:relaunch'
 } as const
 
 export type DocumentContext = { kind: 'document'; path: string; fileName: string; fingerprint: Fingerprint }
@@ -37,4 +45,12 @@ export interface PdfReaderApi {
   openFileDialog(): Promise<void>
   openPath(path: string): Promise<OpenResult>
   listRecent(): Promise<RecentView[]>
+  flushReadingPosition(): void
+  getSettings(): Promise<Settings>
+  updateSettings(patch: Partial<Settings>): Promise<Settings>
+  /** Subscribes to Settings changes made in any window; returns an unsubscribe function. */
+  onSettingsChanged(listener: (settings: Settings) => void): () => void
+  getDataFolderInfo(): Promise<DataFolderInfo>
+  chooseDataFolder(): Promise<string | null>
+  relaunchApp(): void
 }

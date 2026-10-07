@@ -302,7 +302,7 @@ function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) 
       <div className="toolbar">
         <button
           className={sidebarOpen ? 'active' : ''}
-          title={t.highlight.togglePanel}
+          title={t.reader.toggleSidebar}
           aria-pressed={sidebarOpen}
           onClick={() => setSidebarOpen((open) => !open)}
         >

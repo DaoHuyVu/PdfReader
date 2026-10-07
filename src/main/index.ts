@@ -1,4 +1,13 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  type IpcMainEvent,
+  type IpcMainInvokeEvent,
+  type OpenDialogOptions
+} from 'electron'
 import { access, readFile } from 'fs/promises'
 import { basename, join } from 'path'
 import {
@@ -15,15 +24,21 @@ import {
 import { IPC, type DocumentContext, type OpenResult, type RecentView } from '../shared/ipc'
 import { t } from '../shared/strings'
 import { findPdfArg } from './argv'
-import { documentsDir, resolveDataFolder } from './dataFolder'
+import { describeDataFolder, documentsDir, resolveDataFolder } from './dataFolder'
 import { DocumentStore } from './documentStore'
 import { computeFingerprint } from './fingerprint'
 import { PositionSaver } from './positionSaver'
 import { findCarryOverSource, RecentStore } from './recent'
+import { SettingsStore } from './settings'
 import { AppWindows } from './windows'
+import { DEFAULT_SETTINGS, type DataFolderInfo, type Settings } from '../shared/settings'
 
 const windows = new AppWindows()
-const store = new DocumentStore(documentsDir(resolveDataFolder(process.env)))
+const settingsStore = new SettingsStore(join(app.getPath('userData'), 'settings.json'))
+let settings: Settings = { ...DEFAULT_SETTINGS }
+// The Data Folder this running app uses; chosen once at startup (a change needs a restart).
+let activeDataFolder = ''
+let store: DocumentStore
 const recent = new RecentStore(join(app.getPath('userData'), 'recent.json'))
 const saver = new PositionSaver(async (fingerprint, { reading, pageCount }) => {
   await store.update(fingerprint, (data) => ({ ...data, pageCount, reading: newerReading(data.reading, reading) }))
@@ -158,6 +173,23 @@ function requireDocument(event: IpcMainInvokeEvent): DocumentContext {
   return context
 }
 
+function broadcastSettings(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send(IPC.settingsChanged, settings)
+  }
+}
+
+async function applySettings(patch: unknown): Promise<Settings> {
+  settings = await settingsStore.update(patch)
+  broadcastSettings()
+  return settings
+}
+
+function dataFolderInfo(): DataFolderInfo {
+  const described = describeDataFolder(process.env, settings.dataFolder)
+  return { ...described, restartNeeded: described.path.toLowerCase() !== activeDataFolder.toLowerCase() }
+}
+
 function registerIpc(): void {
   ipcMain.handle(IPC.getContext, (event) => windows.contextFor(event.sender.id) ?? { kind: 'home' })
   ipcMain.handle(IPC.readDocumentBytes, (event) => readFile(requireDocument(event).path))
@@ -170,6 +202,10 @@ function registerIpc(): void {
     if (!win || win.isDestroyed() || !win.isFocused()) {
       void saver.flush(context.fingerprint).catch(logSaveError)
     }
+  })
+  ipcMain.on(IPC.flushReadingPosition, (event) => {
+    const context = documentOf(event)
+    if (context) void saver.flush(context.fingerprint).catch(logSaveError)
   })
   ipcMain.handle(IPC.saveHighlight, async (event, highlight: unknown) => {
     const { fingerprint } = requireDocument(event)
@@ -184,6 +220,22 @@ function registerIpc(): void {
   ipcMain.handle(IPC.openFileDialog, () => showOpenDialog())
   ipcMain.handle(IPC.openPath, (_event, path: string) => openPath(path))
   ipcMain.handle(IPC.listRecent, () => listRecentViews())
+  ipcMain.handle(IPC.getSettings, () => settings)
+  ipcMain.handle(IPC.updateSettings, (_event, patch: unknown) => applySettings(patch))
+  ipcMain.handle(IPC.getDataFolderInfo, () => dataFolderInfo())
+  ipcMain.handle(IPC.chooseDataFolder, async (event) => {
+    const options: OpenDialogOptions = { title: t.settings.chooseTitle, properties: ['openDirectory', 'createDirectory'] }
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    const folder = result.filePaths[0]
+    if (result.canceled || !folder) return null
+    await applySettings({ dataFolder: folder })
+    return folder
+  })
+  ipcMain.on(IPC.relaunchApp, () => {
+    app.relaunch()
+    app.quit()
+  })
 }
 
 function setMenu(): void {
@@ -216,6 +268,9 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.whenReady().then(async () => {
+    settings = await settingsStore.load()
+    activeDataFolder = resolveDataFolder(process.env, settings.dataFolder)
+    store = new DocumentStore(documentsDir(activeDataFolder))
     registerIpc()
     setMenu()
     const path = findPdfArg(process.argv)
