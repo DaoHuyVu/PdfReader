@@ -210,3 +210,40 @@ body {
 .textLayer.selecting .endOfContent {
   top: 0;
 }
+.highlight-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.highlight-rect {
+  position: absolute;
+  mix-blend-mode: multiply;
+  border-radius: 2px;
+}
+.highlight-rect.active {
+  outline: 2px solid rgba(0, 0, 0, 0.45);
+}
+.selection-toolbar {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+.swatch {
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+}
+.swatch.selected {
+  outline: 2px solid #1f1f1f;
+  outline-offset: 1px;
+}

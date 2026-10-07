@@ -1,6 +1,17 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { ReadingPosition, ZoomSetting } from '../../../shared/documentData'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  HIGHLIGHT_COLORS,
+  type Highlight,
+  type HighlightColor,
+  type ReadingPosition,
+  type ZoomSetting
+} from '../../../shared/documentData'
 import { t } from '../../../shared/strings'
+import { highlightsByPage } from './highlights/geometry'
+import { HighlightLayer } from './highlights/HighlightLayer'
+import { isEditableTarget, readSelection, type PendingSelection } from './highlights/selection'
+import { SelectionToolbar } from './highlights/SelectionToolbar'
+import { useHighlights } from './highlights/useHighlights'
 import {
   computeScale,
   contentWidth,
@@ -20,7 +31,9 @@ import { createThrottle } from './throttle'
 type LoadState =
   | { status: 'loading' }
   | { status: 'error' }
-  | { status: 'ready'; pdf: LoadedPdf; initial: ReadingPosition | null }
+  | { status: 'ready'; pdf: LoadedPdf; initial: ReadingPosition | null; highlights: Highlight[] }
+
+const NO_HIGHLIGHTS: Highlight[] = []
 
 export function ReaderView() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
@@ -29,7 +42,7 @@ export function ReaderView() {
     let cancelled = false
     void (async () => {
       const dataPromise = window.api.loadDocumentData().then(
-        (data) => data.reading,
+        (data) => data,
         (err) => {
           console.error('Failed to load document data', err)
           return null
@@ -38,8 +51,10 @@ export function ReaderView() {
       try {
         const bytes = await window.api.readDocumentBytes()
         const pdf = await loadPdf(bytes)
-        const reading = await dataPromise
-        if (!cancelled) setState({ status: 'ready', pdf, initial: reading })
+        const data = await dataPromise
+        if (!cancelled) {
+          setState({ status: 'ready', pdf, initial: data?.reading ?? null, highlights: data?.highlights ?? NO_HIGHLIGHTS })
+        }
       } catch (err) {
         console.error('Failed to open document', err)
         if (!cancelled) setState({ status: 'error' })
@@ -52,10 +67,16 @@ export function ReaderView() {
 
   if (state.status === 'loading') return <div className="status">{t.reader.loading}</div>
   if (state.status === 'error') return <div className="status">{t.reader.loadFailed}</div>
-  return <ReaderSurface pdf={state.pdf} initial={state.initial} />
+  return <ReaderSurface pdf={state.pdf} initial={state.initial} initialHighlights={state.highlights} />
 }
 
-function ReaderSurface({ pdf, initial }: { pdf: LoadedPdf; initial: ReadingPosition | null }) {
+interface ReaderSurfaceProps {
+  pdf: LoadedPdf
+  initial: ReadingPosition | null
+  initialHighlights: Highlight[]
+}
+
+function ReaderSurface({ pdf, initial, initialHighlights }: ReaderSurfaceProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [viewport, setViewport] = useState({ width: 0, height: 0 })
   const [scrollTop, setScrollTop] = useState(0)
@@ -72,6 +93,11 @@ function ReaderSurface({ pdf, initial }: { pdf: LoadedPdf; initial: ReadingPosit
   // The zoom value in effect at mount, so the zoom-sync effect below does not report a
   // position just because it ran once after mount.
   const initialZoomRef = useRef(zoom)
+
+  const onHighlightError = useCallback(() => alert(t.highlight.saveFailed), [])
+  const { highlights, save } = useHighlights(initialHighlights, onHighlightError)
+  const byPage = useMemo(() => highlightsByPage(highlights), [highlights])
+  const [selection, setSelection] = useState<PendingSelection | null>(null)
 
   const pageCount = pdf.pageSizes.length
   const measured = viewport.width > 0
@@ -119,22 +145,56 @@ function ReaderSurface({ pdf, initial }: { pdf: LoadedPdf; initial: ReadingPosit
     }
   }, [report])
 
+  const clearSelection = useCallback(() => {
+    window.getSelection()?.removeAllRanges()
+    setSelection(null)
+  }, [])
+
+  const createHighlight = useCallback(
+    (color: HighlightColor) => {
+      if (!selection) return
+      const now = Date.now()
+      save({
+        id: crypto.randomUUID(),
+        color,
+        note: null,
+        text: selection.text,
+        parts: selection.parts,
+        createdAt: now,
+        updatedAt: now
+      })
+      clearSelection()
+    },
+    [selection, save, clearSelection]
+  )
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!event.ctrlKey) return
-      if (event.key === '=' || event.key === '+') setZoom(stepZoom(scale, 1))
-      else if (event.key === '-') setZoom(stepZoom(scale, -1))
-      else if (event.key === '0') setZoom({ mode: 'fit-width' })
-      else return
-      event.preventDefault()
+      if (event.ctrlKey) {
+        if (event.key === '=' || event.key === '+') setZoom(stepZoom(scale, 1))
+        else if (event.key === '-') setZoom(stepZoom(scale, -1))
+        else if (event.key === '0') setZoom({ mode: 'fit-width' })
+        else return
+        event.preventDefault()
+        return
+      }
+      if (event.altKey || event.metaKey || isEditableTarget(event.target) || !selection) return
+      const key = Number(event.key)
+      if (Number.isInteger(key) && key >= 1 && key <= HIGHLIGHT_COLORS.length) {
+        event.preventDefault()
+        createHighlight(HIGHLIGHT_COLORS[key - 1])
+      } else if (event.key === 'Escape') {
+        clearSelection()
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [scale])
+  }, [scale, selection, createHighlight, clearSelection])
 
   const onScroll = () => {
     const element = scrollRef.current
     if (!element) return
+    setSelection(null)
     const suppressed = suppressedScrollTopRef.current
     suppressedScrollTopRef.current = null
     if (suppressed !== null && suppressed === element.scrollTop) {
@@ -146,6 +206,12 @@ function ReaderSurface({ pdf, initial }: { pdf: LoadedPdf; initial: ReadingPosit
     const position = positionFromScroll(element.scrollTop, boxes)
     anchorRef.current = position
     report.call({ ...position, zoom: zoomRef.current, updatedAt: Date.now() })
+  }
+
+  const onMouseUp = () => {
+    const element = scrollRef.current
+    if (!element) return
+    setSelection(readSelection(element, scale))
   }
 
   const range = visiblePageRange(scrollTop, viewport.height, boxes)
@@ -169,7 +235,7 @@ function ReaderSurface({ pdf, initial }: { pdf: LoadedPdf; initial: ReadingPosit
         </button>
         <span className="page-indicator">{t.reader.page(current + 1, pageCount)}</span>
       </div>
-      <div className="scroll" ref={scrollRef} onScroll={onScroll}>
+      <div className="scroll" ref={scrollRef} onScroll={onScroll} onMouseUp={onMouseUp}>
         <div className="pages" style={{ height: totalHeight(boxes), width: Math.max(viewport.width, contentWidth(boxes)) }}>
           {boxes.map((box, pageIndex) => (
             <PdfPage
@@ -179,10 +245,18 @@ function ReaderSurface({ pdf, initial }: { pdf: LoadedPdf; initial: ReadingPosit
               box={box}
               scale={scale}
               visible={pageIndex >= range.first && pageIndex <= range.last}
-            />
+            >
+              <HighlightLayer
+                highlights={byPage.get(pageIndex) ?? NO_HIGHLIGHTS}
+                pageIndex={pageIndex}
+                scale={scale}
+                activeId={null}
+              />
+            </PdfPage>
           ))}
         </div>
       </div>
+      {selection && <SelectionToolbar anchor={selection.anchor} onPick={createHighlight} />}
     </div>
   )
 }
