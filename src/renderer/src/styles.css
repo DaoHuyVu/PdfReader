@@ -15,3 +15,61 @@ body {
   background: #f3f3f3;
   color: #1f1f1f;
 }
+.status {
+  padding: 32px;
+  color: #666;
+}
+.reader {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+}
+.toolbar button {
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 4px;
+  padding: 3px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+.toolbar button.active {
+  background: #e3edff;
+  border-color: #7aa7ff;
+}
+.zoom-value {
+  min-width: 48px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.page-indicator {
+  margin-left: auto;
+  color: #555;
+  font-variant-numeric: tabular-nums;
+}
+.scroll {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: scroll; /* always reserve the scrollbar so fit-width does not oscillate */
+  background: #e6e6e6;
+}
+.pages {
+  position: relative;
+}
+.page {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+.page canvas {
+  display: block;
+}
