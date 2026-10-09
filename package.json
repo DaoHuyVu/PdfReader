@@ -20,6 +20,7 @@
     "electron": "^38.8.6",
     "electron-builder": "^26.15.3",
     "electron-vite": "^4.0.1",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "4.10.38",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
