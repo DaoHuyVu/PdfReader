@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { rename, unlink, writeFile } from 'fs/promises'
 import { resolve } from 'path'
-import { EncryptedPDFError, PDFDocument, PDFHexString, PDFName, PDFString } from 'pdf-lib'
+import { PDFDocument, PDFHexString, PDFName, PDFString } from 'pdf-lib'
 import type { ExportAnnotation } from '../shared/ipc'
 
 /** The source PDF is encrypted; pdf-lib cannot add annotations to it safely. */
@@ -72,13 +72,9 @@ export async function writeAnnotatedPdf(
   annotations: ExportAnnotation[],
   now: Date
 ): Promise<Uint8Array> {
-  let doc: PDFDocument
-  try {
-    doc = await PDFDocument.load(Uint8Array.from(source), { updateMetadata: false })
-  } catch (err) {
-    if (err instanceof EncryptedPDFError) throw new EncryptedPdfError()
-    throw err
-  }
+  // pdf-lib's own EncryptedPDFError fails `instanceof` (ES5 subclass of Error), so check the flag instead.
+  const doc = await PDFDocument.load(Uint8Array.from(source), { updateMetadata: false, ignoreEncryption: true })
+  if (doc.isEncrypted) throw new EncryptedPdfError()
   const pages = doc.getPages()
   for (const annotation of annotations) {
     const page = pages[annotation.pageIndex]

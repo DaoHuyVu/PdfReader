@@ -4,7 +4,14 @@ import { join } from 'path'
 import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, PDFRef } from 'pdf-lib'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ExportAnnotation } from '../shared/ipc'
-import { exportFileName, isExportAnnotation, sameFilePath, writeAnnotatedPdf, writeFileAtomic } from './exportPdf'
+import {
+  EncryptedPdfError,
+  exportFileName,
+  isExportAnnotation,
+  sameFilePath,
+  writeAnnotatedPdf,
+  writeFileAtomic
+} from './exportPdf'
 
 const ANNOTATION: ExportAnnotation = {
   pageIndex: 0,
@@ -60,6 +67,14 @@ describe('writeAnnotatedPdf', () => {
     const output = await writeAnnotatedPdf(source, [{ ...ANNOTATION, pageIndex: 5 }], new Date())
     expect((await annotsOf(output)).annots).toHaveLength(0)
     expect(source).toEqual(copy)
+  })
+
+  it('throws EncryptedPdfError for an encrypted source', async () => {
+    const doc = await PDFDocument.create()
+    doc.addPage([600, 800])
+    doc.context.trailerInfo.Encrypt = doc.context.register(doc.context.obj({ Filter: 'Standard' }))
+    const encrypted = await doc.save()
+    await expect(writeAnnotatedPdf(encrypted, [ANNOTATION], new Date())).rejects.toBeInstanceOf(EncryptedPdfError)
   })
 })
 
