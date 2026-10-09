@@ -54,3 +54,17 @@ export interface PdfReaderApi {
   chooseDataFolder(): Promise<string | null>
   relaunchApp(): void
 }
+
+export interface ExportAnnotation {
+  pageIndex: number
+  /** [x1, y1, x2, y2] in PDF user space (origin bottom-left). */
+  rect: [number, number, number, number]
+  /** 8 numbers per rectangle: upper-left, upper-right, lower-left, lower-right corners (x, y). */
+  quadPoints: number[]
+  /** sRGB channels 0..1. */
+  color: [number, number, number]
+  note: string | null
+}
+export type ExportResult =
+  | { ok: true; path: string }
+  | { ok: false; reason: 'cancelled' | 'same-file' | 'encrypted' | 'error'; message?: string }
