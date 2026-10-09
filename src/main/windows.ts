@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
 import type { DocumentContext, WindowContext } from '../shared/ipc'
 import { t } from '../shared/strings'
@@ -52,6 +52,8 @@ export class AppWindows {
       width: 1100,
       height: 850,
       title,
+      // Packaged builds take the icon from the exe; in development point at the generated PNG.
+      icon: app.isPackaged ? undefined : join(__dirname, '../../build/icon.png'),
       show: false,
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),

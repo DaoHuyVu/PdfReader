@@ -2,11 +2,13 @@ appId: com.vudh.pdfreader
 productName: PdfReader
 directories:
   output: dist
+  buildResources: build
 files:
   - out/**
   - package.json
 win:
   target: nsis
+  icon: build/icon.png
 nsis:
   # One-click per-user install (no admin prompt) into %LOCALAPPDATA%\Programs\PdfReader.
   oneClick: true

@@ -8,6 +8,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "icon": "node scripts/make-icon.mjs",
     "dist": "electron-vite build && electron-builder --win",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
