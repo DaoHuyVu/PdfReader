@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm } from 'fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, PDFRef } from 'pdf-lib'
@@ -8,6 +8,7 @@ import {
   EncryptedPdfError,
   exportFileName,
   isExportAnnotation,
+  loadForExport,
   sameFilePath,
   writeAnnotatedPdf,
   writeFileAtomic
@@ -78,6 +79,21 @@ describe('writeAnnotatedPdf', () => {
   })
 })
 
+describe('loadForExport', () => {
+  it('loads a plain PDF so writeAnnotatedPdf can reuse it', async () => {
+    const doc = await loadForExport(await samplePdf())
+    const output = await writeAnnotatedPdf(doc, [ANNOTATION], new Date())
+    expect((await annotsOf(output)).annots).toHaveLength(2)
+  })
+
+  it('throws EncryptedPdfError for an encrypted source', async () => {
+    const doc = await PDFDocument.create()
+    doc.addPage([600, 800])
+    doc.context.trailerInfo.Encrypt = doc.context.register(doc.context.obj({ Filter: 'Standard' }))
+    await expect(loadForExport(await doc.save())).rejects.toBeInstanceOf(EncryptedPdfError)
+  })
+})
+
 describe('isExportAnnotation', () => {
   it('accepts a valid annotation and rejects malformed ones', () => {
     expect(isExportAnnotation(ANNOTATION)).toBe(true)
@@ -120,5 +136,20 @@ describe('writeFileAtomic', () => {
     await writeFileAtomic(join(dir, 'out.pdf'), Uint8Array.from([1, 2, 3]))
     expect([...(await readFile(join(dir, 'out.pdf')))]).toEqual([1, 2, 3])
     expect(await readdir(dir)).toEqual(['out.pdf'])
+  })
+
+  it('removes the temp file when the final rename fails', async () => {
+    // A directory at the target path makes rename fail (EISDIR/EPERM/EEXIST) after the temp file is written.
+    await mkdir(join(dir, 'out.pdf'))
+    await writeFile(join(dir, 'out.pdf', 'keep'), 'x')
+    await expect(writeFileAtomic(join(dir, 'out.pdf'), Uint8Array.from([1]))).rejects.toThrow()
+    expect(await readdir(dir)).toEqual(['out.pdf'])
+  })
+
+  it('cleans up and rethrows when the write itself fails', async () => {
+    // The parent of the target is a file, so no temp file can be created there.
+    await writeFile(join(dir, 'file'), 'x')
+    await expect(writeFileAtomic(join(dir, 'file', 'out.pdf'), Uint8Array.from([1]))).rejects.toThrow()
+    expect(await readdir(dir)).toEqual(['file'])
   })
 })

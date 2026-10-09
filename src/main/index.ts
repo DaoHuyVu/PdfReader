@@ -10,6 +10,7 @@ import {
   type SaveDialogOptions
 } from 'electron'
 import { access, readFile } from 'fs/promises'
+import type { PDFDocument } from 'pdf-lib'
 import { basename, dirname, join } from 'path'
 import {
   carryOver,
@@ -28,6 +29,7 @@ import {
   EncryptedPdfError,
   exportFileName,
   isExportAnnotation,
+  loadForExport,
   sameFilePath,
   writeAnnotatedPdf,
   writeFileAtomic
@@ -35,7 +37,7 @@ import {
 import { findPdfArg } from './argv'
 import { describeDataFolder, documentsDir, resolveDataFolder } from './dataFolder'
 import { DocumentStore } from './documentStore'
-import { computeFingerprint } from './fingerprint'
+import { computeFingerprint, FINGERPRINT_HEAD_BYTES, fingerprintFromHead } from './fingerprint'
 import { PositionSaver } from './positionSaver'
 import { findCarryOverSource, RecentStore } from './recent'
 import { SettingsStore } from './settings'
@@ -224,7 +226,22 @@ function registerIpc(): void {
   })
   ipcMain.handle(IPC.exportPdf, async (event, annotations: unknown): Promise<ExportResult> => {
     const context = requireDocument(event)
-    if (!Array.isArray(annotations) || !annotations.every(isExportAnnotation)) throw new Error('Invalid export payload')
+    if (!Array.isArray(annotations) || annotations.length === 0 || !annotations.every(isExportAnnotation)) {
+      throw new Error('Invalid export payload')
+    }
+    // Check the source before asking where to save, and keep these bytes for the write (no second read).
+    let source: Uint8Array
+    let doc: PDFDocument
+    try {
+      source = await readFile(context.path)
+      const head = source.subarray(0, FINGERPRINT_HEAD_BYTES)
+      if (fingerprintFromHead(head, source.length) !== context.fingerprint) return { ok: false, reason: 'changed' }
+      doc = await loadForExport(source)
+    } catch (err) {
+      if (err instanceof EncryptedPdfError) return { ok: false, reason: 'encrypted' }
+      console.error('Export failed', err)
+      return { ok: false, reason: 'error', message: err instanceof Error ? err.message : String(err) }
+    }
     const options: SaveDialogOptions = {
       title: t.export.dialogTitle,
       defaultPath: join(dirname(context.path), exportFileName(context.fileName)),
@@ -235,7 +252,7 @@ function registerIpc(): void {
     if (choice.canceled || !choice.filePath) return { ok: false, reason: 'cancelled' }
     if (sameFilePath(choice.filePath, context.path)) return { ok: false, reason: 'same-file' }
     try {
-      const bytes = await writeAnnotatedPdf(await readFile(context.path), annotations, new Date())
+      const bytes = await writeAnnotatedPdf(doc, annotations, new Date())
       await writeFileAtomic(choice.filePath, bytes)
       return { ok: true, path: choice.filePath }
     } catch (err) {

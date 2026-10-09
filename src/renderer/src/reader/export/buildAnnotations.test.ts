@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Highlight } from '../../../../shared/documentData'
-import { buildExportAnnotations, type ToPdfPoint } from './buildAnnotations'
+import { buildExportAnnotations, isExportable, type ToPdfPoint } from './buildAnnotations'
 
 // Page-unit point (origin top-left) -> PDF point (origin bottom-left) on an 800-unit-high page shifted 10 right.
 const toPdf: ToPdfPoint = (_pageIndex, x, y) => [x + 10, 800 - y]
@@ -66,5 +66,15 @@ describe('buildExportAnnotations', () => {
       { note: 'n' }
     )
     expect(buildExportAnnotations([highlight], toPdf).map((a) => a.note)).toEqual(['n'])
+  })
+})
+
+describe('isExportable', () => {
+  it('excludes unanchored, carried and rect-less Highlights', () => {
+    const part = [{ pageIndex: 0, rects: [{ x: 0, y: 0, width: 1, height: 1 }] }]
+    expect(isExportable(hl('a', part))).toBe(true)
+    expect(isExportable(hl('b', part, { status: 'unanchored' }))).toBe(false)
+    expect(isExportable(hl('c', part, { status: 'carried' }))).toBe(false)
+    expect(isExportable(hl('d', [{ pageIndex: 0, rects: [] }]))).toBe(false)
   })
 })

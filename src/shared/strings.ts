@@ -119,7 +119,8 @@ export const t = {
 ${path}`,
     failed(result: Extract<ExportResult, { ok: false }>): string {
       if (result.reason === 'same-file') return 'Không thể ghi đè lên file gốc. Hãy chọn tên khác.'
-      if (result.reason === 'encrypted') return 'File có mật khẩu nên chưa xuất được.'
+      if (result.reason === 'encrypted') return 'File được bảo vệ (mã hóa) nên chưa xuất được.'
+      if (result.reason === 'changed') return 'File đã thay đổi trên đĩa. Hãy mở lại file rồi xuất.'
       return `Xuất PDF thất bại.
 
 ${result.message ?? ''}`

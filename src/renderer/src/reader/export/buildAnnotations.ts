@@ -5,11 +5,16 @@ import type { ExportAnnotation } from '../../../../shared/ipc'
 /** Converts a point in page units (scale 1, origin top-left) to PDF user space. */
 export type ToPdfPoint = (pageIndex: number, x: number, y: number) => [number, number]
 
+/** A Highlight can be exported when it is anchored (not unanchored or carried) and has geometry. */
+export function isExportable(highlight: Highlight): boolean {
+  return highlight.status !== 'unanchored' && highlight.status !== 'carried' && highlight.parts.some((p) => p.rects.length > 0)
+}
+
 export function buildExportAnnotations(highlights: Highlight[], toPdfPoint: ToPdfPoint): ExportAnnotation[] {
   const annotations: ExportAnnotation[] = []
   for (const highlight of highlights) {
     // A carried Highlight still has geometry from the old file, so its position is unverified.
-    if (highlight.status === 'unanchored' || highlight.status === 'carried') continue
+    if (!isExportable(highlight)) continue
     let noteUsed = false
     for (const part of highlight.parts) {
       if (part.rects.length === 0) continue

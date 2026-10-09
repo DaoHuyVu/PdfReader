@@ -15,6 +15,11 @@ A personal desktop PDF reader for Windows. It remembers where you stopped readin
 - Password-protected PDFs (the password is never stored), dark mode, and page inversion for night reading.
 - Recent Documents with reading progress; one window per document; Vietnamese interface.
 
+## Requirements
+
+- Windows 10 or 11 (x64)
+- Node.js 20.19+ or 22.12+ (required by Vite 7)
+
 ## Install
 
 ```bash

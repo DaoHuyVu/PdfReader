@@ -69,4 +69,4 @@ export interface ExportAnnotation {
 }
 export type ExportResult =
   | { ok: true; path: string }
-  | { ok: false; reason: 'cancelled' | 'same-file' | 'encrypted' | 'error'; message?: string }
+  | { ok: false; reason: 'cancelled' | 'same-file' | 'encrypted' | 'changed' | 'error'; message?: string }

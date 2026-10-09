@@ -3,6 +3,7 @@ import { rename, unlink, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 import { PDFDocument, PDFHexString, PDFName, PDFString } from 'pdf-lib'
 import type { ExportAnnotation } from '../shared/ipc'
+import { withRetry } from './documentStore'
 
 /** The source PDF is encrypted; pdf-lib cannot add annotations to it safely. */
 export class EncryptedPdfError extends Error {
@@ -63,18 +64,24 @@ function quadBoxes(quadPoints: number[]): [number, number, number, number][] {
   return boxes
 }
 
-/**
- * Returns a copy of `source` with one /Highlight annotation per entry (plus a /Popup for Notes).
- * The input bytes are not modified.
- */
-export async function writeAnnotatedPdf(
-  source: Uint8Array,
-  annotations: ExportAnnotation[],
-  now: Date
-): Promise<Uint8Array> {
+/** Parses `source` for export; throws EncryptedPdfError if it is encrypted. The input bytes are not modified. */
+export async function loadForExport(source: Uint8Array): Promise<PDFDocument> {
   // pdf-lib's own EncryptedPDFError fails `instanceof` (ES5 subclass of Error), so check the flag instead.
   const doc = await PDFDocument.load(Uint8Array.from(source), { updateMetadata: false, ignoreEncryption: true })
   if (doc.isEncrypted) throw new EncryptedPdfError()
+  return doc
+}
+
+/**
+ * Returns a copy of `source` (bytes, or a document from loadForExport) with one /Highlight annotation
+ * per entry (plus a /Popup for Notes). Passed bytes are not modified.
+ */
+export async function writeAnnotatedPdf(
+  source: Uint8Array | PDFDocument,
+  annotations: ExportAnnotation[],
+  now: Date
+): Promise<Uint8Array> {
+  const doc = source instanceof PDFDocument ? source : await loadForExport(source)
   const pages = doc.getPages()
   for (const annotation of annotations) {
     const page = pages[annotation.pageIndex]
@@ -123,9 +130,9 @@ export async function writeAnnotatedPdf(
 
 export async function writeFileAtomic(path: string, bytes: Uint8Array): Promise<void> {
   const tempPath = `${path}.${randomUUID()}.tmp`
-  await writeFile(tempPath, bytes)
   try {
-    await rename(tempPath, path)
+    await writeFile(tempPath, bytes)
+    await withRetry(() => rename(tempPath, path))
   } catch (err) {
     await unlink(tempPath).catch(() => undefined)
     throw err

@@ -35,6 +35,7 @@ import {
   visiblePageRange,
   type PagePosition
 } from './layout'
+import { isExportable } from './export/buildAnnotations'
 import { collectExportAnnotations } from './export/collectAnnotations'
 import { OutlinePanel } from './outline/OutlinePanel'
 import { outlineScrollTop, type OutlineNode, type OutlineTarget } from './outline/outline'
@@ -192,12 +193,16 @@ function ReaderSurface({ pdf, initial, initialHighlights, invertPages }: ReaderS
   highlightsRef.current = highlights
 
   const [exporting, setExporting] = useState(false)
-  const canExport = highlights.some((h) => h.status !== 'unanchored' && h.parts.some((p) => p.rects.length > 0))
+  const canExport = highlights.some(isExportable)
 
   const exportPdf = async () => {
     setExporting(true)
     try {
       const annotations = await collectExportAnnotations(pdf.doc, highlights)
+      if (annotations.length === 0) {
+        alert(t.export.nothing)
+        return
+      }
       const result = await window.api.exportPdf(annotations)
       if (result.ok) alert(t.export.done(result.path))
       else if (result.reason !== 'cancelled') alert(t.export.failed(result))
