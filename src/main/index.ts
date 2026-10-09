@@ -6,10 +6,11 @@ import {
   Menu,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
-  type OpenDialogOptions
+  type OpenDialogOptions,
+  type SaveDialogOptions
 } from 'electron'
 import { access, readFile } from 'fs/promises'
-import { basename, join } from 'path'
+import { basename, dirname, join } from 'path'
 import {
   carryOver,
   hasCarryableContent,
@@ -21,8 +22,16 @@ import {
   removeHighlight,
   upsertHighlight
 } from '../shared/documentData'
-import { IPC, type DocumentContext, type OpenResult, type RecentView } from '../shared/ipc'
+import { IPC, type DocumentContext, type ExportResult, type OpenResult, type RecentView } from '../shared/ipc'
 import { t } from '../shared/strings'
+import {
+  EncryptedPdfError,
+  exportFileName,
+  isExportAnnotation,
+  sameFilePath,
+  writeAnnotatedPdf,
+  writeFileAtomic
+} from './exportPdf'
 import { findPdfArg } from './argv'
 import { describeDataFolder, documentsDir, resolveDataFolder } from './dataFolder'
 import { DocumentStore } from './documentStore'
@@ -212,6 +221,28 @@ function registerIpc(): void {
     const { fingerprint } = requireDocument(event)
     if (typeof id !== 'string' || id === '') throw new Error('Invalid highlight id')
     await store.update(fingerprint, (data) => removeHighlight(data, id, Date.now()))
+  })
+  ipcMain.handle(IPC.exportPdf, async (event, annotations: unknown): Promise<ExportResult> => {
+    const context = requireDocument(event)
+    if (!Array.isArray(annotations) || !annotations.every(isExportAnnotation)) throw new Error('Invalid export payload')
+    const options: SaveDialogOptions = {
+      title: t.export.dialogTitle,
+      defaultPath: join(dirname(context.path), exportFileName(context.fileName)),
+      filters: [{ name: t.dialog.pdfFilter, extensions: ['pdf'] }]
+    }
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const choice = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
+    if (choice.canceled || !choice.filePath) return { ok: false, reason: 'cancelled' }
+    if (sameFilePath(choice.filePath, context.path)) return { ok: false, reason: 'same-file' }
+    try {
+      const bytes = await writeAnnotatedPdf(await readFile(context.path), annotations, new Date())
+      await writeFileAtomic(choice.filePath, bytes)
+      return { ok: true, path: choice.filePath }
+    } catch (err) {
+      if (err instanceof EncryptedPdfError) return { ok: false, reason: 'encrypted' }
+      console.error('Export failed', err)
+      return { ok: false, reason: 'error', message: err instanceof Error ? err.message : String(err) }
+    }
   })
   ipcMain.handle(IPC.openFileDialog, () => showOpenDialog())
   ipcMain.handle(IPC.openPath, (_event, path: string) => openPath(path))

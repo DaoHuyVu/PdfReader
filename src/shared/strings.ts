@@ -1,4 +1,4 @@
-import type { OpenResult } from './ipc'
+import type { ExportResult, OpenResult } from './ipc'
 
 export const t = {
   appName: 'PdfReader',
@@ -110,5 +110,19 @@ export const t = {
     theme: 'Giao diện',
     themes: { system: 'Theo Windows', light: 'Sáng', dark: 'Tối' },
     invertPages: 'Đảo màu trang PDF (đọc ban đêm)'
+  },
+  export: {
+    button: 'Xuất PDF có highlight',
+    dialogTitle: 'Xuất PDF có highlight',
+    nothing: 'Chưa có highlight để xuất.',
+    done: (path: string) => `Đã xuất file:
+${path}`,
+    failed(result: Extract<ExportResult, { ok: false }>): string {
+      if (result.reason === 'same-file') return 'Không thể ghi đè lên file gốc. Hãy chọn tên khác.'
+      if (result.reason === 'encrypted') return 'File có mật khẩu nên chưa xuất được.'
+      return `Xuất PDF thất bại.
+
+${result.message ?? ''}`
+    }
   }
 }

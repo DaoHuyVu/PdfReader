@@ -35,6 +35,7 @@ import {
   visiblePageRange,
   type PagePosition
 } from './layout'
+import { collectExportAnnotations } from './export/collectAnnotations'
 import { OutlinePanel } from './outline/OutlinePanel'
 import { outlineScrollTop, type OutlineNode, type OutlineTarget } from './outline/outline'
 import {
@@ -189,6 +190,24 @@ function ReaderSurface({ pdf, initial, initialHighlights, invertPages }: ReaderS
   // (not a stale mount-time copy) once the text index has finished building.
   const highlightsRef = useRef(highlights)
   highlightsRef.current = highlights
+
+  const [exporting, setExporting] = useState(false)
+  const canExport = highlights.some((h) => h.status !== 'unanchored' && h.parts.some((p) => p.rects.length > 0))
+
+  const exportPdf = async () => {
+    setExporting(true)
+    try {
+      const annotations = await collectExportAnnotations(pdf.doc, highlights)
+      const result = await window.api.exportPdf(annotations)
+      if (result.ok) alert(t.export.done(result.path))
+      else if (result.reason !== 'cancelled') alert(t.export.failed(result))
+    } catch (err) {
+      console.error('Export failed', err)
+      alert(t.export.failed({ ok: false, reason: 'error', message: err instanceof Error ? err.message : String(err) }))
+    } finally {
+      setExporting(false)
+    }
+  }
 
   // Carried Highlights came from an earlier version of this file; find their text again. Building
   // the text index can take a while, during which the user may edit or delete a carried Highlight;
@@ -537,6 +556,13 @@ function ReaderSurface({ pdf, initial, initialHighlights, invertPages }: ReaderS
           }
         >
           ◐
+        </button>
+        <button
+          title={canExport ? t.export.button : t.export.nothing}
+          disabled={!canExport || exporting}
+          onClick={() => void exportPdf()}
+        >
+          ⤓
         </button>
         <span className="page-indicator">{t.reader.page(current + 1, pageCount)}</span>
       </div>

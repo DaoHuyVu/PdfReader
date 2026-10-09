@@ -17,7 +17,8 @@ export const IPC = {
   settingsChanged: 'settings:changed',
   getDataFolderInfo: 'settings:data-folder',
   chooseDataFolder: 'settings:choose-data-folder',
-  relaunchApp: 'app:relaunch'
+  relaunchApp: 'app:relaunch',
+  exportPdf: 'document:export-pdf'
 } as const
 
 export type DocumentContext = { kind: 'document'; path: string; fileName: string; fingerprint: Fingerprint }
@@ -53,6 +54,7 @@ export interface PdfReaderApi {
   getDataFolderInfo(): Promise<DataFolderInfo>
   chooseDataFolder(): Promise<string | null>
   relaunchApp(): void
+  exportPdf(annotations: ExportAnnotation[]): Promise<ExportResult>
 }
 
 export interface ExportAnnotation {

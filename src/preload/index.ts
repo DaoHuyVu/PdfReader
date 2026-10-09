@@ -24,7 +24,8 @@ const api: PdfReaderApi = {
   },
   getDataFolderInfo: () => ipcRenderer.invoke(IPC.getDataFolderInfo),
   chooseDataFolder: () => ipcRenderer.invoke(IPC.chooseDataFolder),
-  relaunchApp: () => ipcRenderer.send(IPC.relaunchApp)
+  relaunchApp: () => ipcRenderer.send(IPC.relaunchApp),
+  exportPdf: (annotations) => ipcRenderer.invoke(IPC.exportPdf, annotations)
 }
 
 contextBridge.exposeInMainWorld('api', api)
