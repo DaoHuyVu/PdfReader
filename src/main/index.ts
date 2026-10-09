@@ -198,10 +198,6 @@ function registerIpc(): void {
     const context = documentOf(event)
     if (!context || !isReadingPosition(reading) || !Number.isInteger(pageCount) || (pageCount as number) < 0) return
     saver.report(context.fingerprint, { reading, pageCount: pageCount as number })
-    const win = BrowserWindow.fromWebContents(event.sender)
-    if (!win || win.isDestroyed() || !win.isFocused()) {
-      void saver.flush(context.fingerprint).catch(logSaveError)
-    }
   })
   ipcMain.on(IPC.flushReadingPosition, (event) => {
     const context = documentOf(event)

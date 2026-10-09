@@ -76,6 +76,7 @@ export function ReaderView({ invertPages }: { invertPages: boolean }) {
 
   useEffect(() => {
     let cancelled = false
+    let loaded: LoadedPdf | null = null
     const requestPassword = (reason: PasswordReason) =>
       new Promise<string | null>((resolve) => {
         if (cancelled) {
@@ -96,6 +97,11 @@ export function ReaderView({ invertPages }: { invertPages: boolean }) {
       try {
         const bytes = await window.api.readDocumentBytes()
         const pdf = await loadPdf(bytes, requestPassword)
+        if (cancelled) {
+          void pdf.doc.destroy()
+          return
+        }
+        loaded = pdf
         const data = await dataPromise
         if (!cancelled) {
           setState({ status: 'ready', pdf, initial: data?.reading ?? null, highlights: data?.highlights ?? NO_HIGHLIGHTS })
@@ -111,6 +117,7 @@ export function ReaderView({ invertPages }: { invertPages: boolean }) {
     })()
     return () => {
       cancelled = true
+      void loaded?.doc.destroy()
     }
   }, [])
 
@@ -137,6 +144,7 @@ export function ReaderView({ invertPages }: { invertPages: boolean }) {
   }
   if (state.status === 'error') return <div className="status">{t.reader.loadFailed}</div>
   if (state.status === 'password-cancelled') return <div className="status">{t.reader.passwordCancelled}</div>
+  if (state.pdf.pageSizes.length === 0) return <div className="status">{t.reader.emptyDocument}</div>
   return <ReaderSurface pdf={state.pdf} initial={state.initial} initialHighlights={state.highlights} invertPages={invertPages} />
 }
 
@@ -303,7 +311,10 @@ function ReaderSurface({ pdf, initial, initialHighlights, invertPages }: ReaderS
   }, [scale])
 
   useEffect(() => {
-    const flush = () => report.flush()
+    const flush = () => {
+      report.flush()
+      window.api.flushReadingPosition()
+    }
     window.addEventListener('blur', flush)
     window.addEventListener('beforeunload', flush)
     return () => {
