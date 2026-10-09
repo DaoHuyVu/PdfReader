@@ -17,3 +17,4 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: PdfReader
   runAfterFinish: true
+  include: build/installer.nsh

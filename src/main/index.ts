@@ -279,7 +279,7 @@ function setMenu(): void {
       },
       {
         label: t.menu.view,
-        submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }]
+        submenu: app.isPackaged ? [{ role: 'reload' }] : [{ role: 'reload' }, { role: 'toggleDevTools' }]
       }
     ])
   )

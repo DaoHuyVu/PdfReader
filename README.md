@@ -1,24 +1,19 @@
 # PdfReader
 
-A personal desktop PDF reader for Windows that remembers where you stopped reading. It never modifies your PDF files.
-
-> **Status:** Plan 1 (Reader Core) is done: reading, zoom, and an automatically saved reading position. Highlights, Notes, search, dark mode and an installer are planned (see [Roadmap](#roadmap)).
+A personal desktop PDF reader for Windows. It remembers where you stopped reading, lets you highlight text and add notes, and never modifies your PDF files.
 
 ## Features
 
-- Continuous vertical scrolling. Only pages near the viewport are rendered, so large PDFs stay smooth.
-- Zoom modes: fit width, fit page, and fixed steps from 25% to 400%.
-- Automatic **Reading Position**: the app saves the page, the position within the page, and the zoom, then reopens the Document exactly there. It saves only after you scroll or zoom; opening a file alone writes nothing.
-- A Document is identified by its content, not its path. Renamed, moved or copied files keep their position. See [ADR 0001](docs/adr/0001-identify-documents-by-content.md).
-- **Recent Documents** screen that shows the reading progress of each file.
-- One window per Document. Opening a file that is already open focuses its window.
-- Opens directly when you launch it with a `.pdf` path, for example "Open with" from Explorer. Only one app instance runs.
-- Vietnamese user interface.
-
-## Requirements
-
-- Windows 10 or 11 (x64)
-- Node.js 20.19+ or 22.12+ (required by Vite 7)
+- Continuous scrolling; only pages near the viewport are rendered, so large PDFs stay smooth.
+- Zoom: fit width, fit page, and steps from 25% to 400%.
+- **Reading Position** saved automatically (page, position in the page, zoom). It is saved only after you scroll or zoom; opening a file alone writes nothing.
+- **Highlights** in 5 colors (select text, then click a color or press `1`–`5`), with optional **Notes**. A highlight can cross a page break.
+- Sidebar (`Ctrl+B`): **Outline** (bookmarks) and **Highlights** (sorted by position, filter by color, search ignoring case and Vietnamese diacritics).
+- **Search** in the document (`Ctrl+F`).
+- **Export** a new PDF that contains your highlights and notes as standard annotations; the original file is never changed.
+- Files are identified by content, so renamed or moved files keep their data. When a file's content changes, the app offers to **Carry Over** the old position and highlights and re-anchors them by their text ([ADR 0001](docs/adr/0001-identify-documents-by-content.md)).
+- Password-protected PDFs (the password is never stored), dark mode, and page inversion for night reading.
+- Recent Documents with reading progress; one window per document; Vietnamese interface.
 
 ## Install
 
@@ -28,100 +23,65 @@ npm run dist
 ```
 
 This builds `dist\PdfReader Setup <version>.exe`. Run it once:
-- It installs PdfReader for the current user into `%LOCALAPPDATA%\Programs\PdfReader`, with no admin prompt.
-- It creates a **PdfReader** desktop shortcut and a Start menu entry.
-- It starts the app when it finishes.
+- It installs PdfReader for the current user (`%LOCALAPPDATA%\Programs\PdfReader`), with no admin prompt.
+- It creates a desktop shortcut and a Start menu entry, and starts the app.
+- It adds PdfReader to **Open with** for `.pdf` files. It does not change your default PDF app; choose it yourself in Windows if you want.
 
-After that, double-click the desktop icon to start the app. Uninstall it from Windows Settings > Apps.
-
-The installer is not code-signed, so Windows SmartScreen may show "Windows protected your PC". Click **More info**, then **Run anyway**.
-
-## Getting started (development)
-
-```bash
-npm install
-npm run dev
-```
-
-| Script | What it does |
-|---|---|
-| `npm run dev` | Starts the app with hot reload |
-| `npm run dist` | Builds the Windows installer into `dist\` |
-| `npm run build` | Builds main, preload and renderer into `out/` |
-| `npm run preview` | Runs the built app |
-| `npm run typecheck` | Runs TypeScript with no output files |
-| `npm test` | Runs the Vitest unit tests |
-
-To open a PDF directly with the built app:
-
-```bash
-npm run build
-npx electron . "D:\Books\some.pdf"
-```
+Uninstall from Windows Settings > Apps. The installer is not code-signed, so SmartScreen may warn: click **More info**, then **Run anyway**.
 
 ## Keyboard shortcuts
 
 | Keys | Action |
 |---|---|
 | `Ctrl+O` | Open a PDF |
-| `Ctrl+H` | Show Recent Documents |
-| `Ctrl+=` / `Ctrl++` | Zoom in |
-| `Ctrl+-` | Zoom out |
-| `Ctrl+0` | Fit width |
+| `Ctrl+H` | Recent Documents |
+| `Ctrl+B` | Toggle the sidebar |
+| `Ctrl+F` | Search; `Enter` / `Shift+Enter` or `F3` / `Shift+F3` for next / previous |
+| `1`–`5` | Highlight the selected text (yellow, green, blue, pink, orange) |
+| `Esc` | Cancel the selection, close search or menus |
+| `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | Zoom in / out / fit width |
 
 ## Where data is stored
 
-The app keeps one JSON file per Document in the **Data Folder**, under `documents\<fingerprint>.json`. The Data Folder is chosen in this order:
+One JSON file per document in the **Data Folder**, under `documents\<fingerprint>.json`. The Data Folder is chosen in this order:
 
-1. `PDFREADER_DATA_DIR`, if this environment variable is set
-2. `%OneDriveConsumer%\PdfReaderData`: your personal OneDrive, so every machine sees the same data
-3. `%APPDATA%\PdfReader`: local only, no sync
+1. `PDFREADER_DATA_DIR` (environment variable, for development)
+2. The folder chosen in **Settings** (applies after restart; existing data is not moved)
+3. `%OneDriveConsumer%\PdfReaderData` — your personal OneDrive, so every machine sees the same data
+4. `%APPDATA%\PdfReader` — local only
 
-Work or school OneDrive (`%OneDrive%`, `%OneDriveCommercial%`) is ignored on purpose, so personal reading data never syncs into an employer's tenant.
+Work/school OneDrive is never used, so personal reading data does not sync into an employer's tenant. OneDrive conflict copies are merged automatically (newest Reading Position wins; highlights are combined; deleted highlights stay deleted). See [ADR 0002](docs/adr/0002-per-document-json-in-onedrive.md).
 
-How sync works:
-- When two machines change the same Document while offline, OneDrive creates a Conflict Copy. The app merges it the next time it loads that Document and then deletes the copy. The most recently updated Reading Position wins.
-- A data file that cannot be read is renamed to `<fingerprint>.corrupt-<time>.bak` and is never deleted.
-- A data file written by a newer app version (`schemaVersion` > 1) is left untouched.
+Per-machine files in the app's user-data folder (`%APPDATA%\PdfReader` for the installed app, `%APPDATA%\pdf-reader` for `npm run dev`): `recent.json` (Recent Documents) and `settings.json` (Settings).
 
-See [ADR 0002](docs/adr/0002-per-document-json-in-onedrive.md).
+## Development
 
-The Recent Documents list is stored per machine, because file paths differ between machines:
-- installed app: `%APPDATA%\PdfReader\recent.json`
-- `npm run dev`: `%APPDATA%\pdf-reader\recent.json`
+| Script | What it does |
+|---|---|
+| `npm run dev` | Start with hot reload |
+| `npm run build` | Build into `out/` |
+| `npm run preview` | Run the built app |
+| `npm run dist` | Build the Windows installer into `dist\` |
+| `npm run icon` | Regenerate `build/icon.png` |
+| `npm run typecheck` | TypeScript check |
+| `npm test` | Vitest unit tests |
 
-## Development notes
-
-- **Keep test data out of your real Data Folder.** Set `PDFREADER_DATA_DIR` first:
-  ```powershell
-  $env:PDFREADER_DATA_DIR = "$env:TEMP\pdfreader-dev"; npm run dev
-  ```
-  This does not isolate the Recent Documents list, which is always in `%APPDATA%\pdf-reader`.
-- **Error `electron.app` is undefined, or Electron starts as plain Node:** your environment has `ELECTRON_RUN_AS_NODE=1` set. Some tool and agent environments set it. Clear it before running:
-  ```powershell
-  Remove-Item Env:ELECTRON_RUN_AS_NODE; npm run dev
-  ```
-- **Electron binary missing after `npm install`** (`node_modules/electron/dist` has no `electron.exe`): run `node node_modules/electron/install.js` again.
-- `pdfjs-dist` is pinned to exactly `4.10.38`. Do not widen the version range.
+- Keep test data out of your real Data Folder: `$env:PDFREADER_DATA_DIR = "$env:TEMP\pdfreader-dev"; npm run dev`.
+- If Electron starts as plain Node (`electron.app` is undefined), your shell has `ELECTRON_RUN_AS_NODE=1`; run `Remove-Item Env:ELECTRON_RUN_AS_NODE` first.
+- If `node_modules/electron/dist` has no `electron.exe` after `npm install`, run `node node_modules/electron/install.js`.
+- `pdfjs-dist` is pinned to exactly `4.10.38`.
+- DevTools (View > Toggle Developer Tools) exist only in development; the installed app does not have them. The Content-Security-Policy applies to production builds only.
+- Domain terms are defined in [CONTEXT.md](CONTEXT.md); decisions in [docs/adr](docs/adr/); plans in [docs/superpowers/plans](docs/superpowers/plans/).
 
 ## Project structure
 
 ```
 src/
-  shared/      Types and logic used by both processes: Document data and merge rules, IPC contract, UI strings
-  main/        Electron main process: Fingerprint, Data Folder, Document store, position saver, Recent list, windows
-  preload/     Exposes the typed window.api to the renderer (contextIsolation + sandbox)
-  renderer/    React UI: reader view (pdf.js) and Recent Documents view
-docs/
-  adr/         Architecture decision records
-  superpowers/plans/  Implementation plans
-CONTEXT.md     Domain glossary: use these terms in code and discussion
+  shared/     Document data and merge rules, Settings types, IPC contract, UI strings, highlight colors
+  main/       Electron main: Fingerprint, Data Folder, Document store, saver, Recent, Settings, export, windows
+  preload/    Typed window.api (contextIsolation + sandbox)
+  renderer/   React UI: reader (pdf.js), highlights, outline, search, export, home, settings
+scripts/      make-icon.mjs
+build/        icon.png, installer.nsh
+docs/         ADRs and implementation plans
 ```
-
-Unit tests sit next to the code they test (`*.test.ts`). They cover the pure logic: Fingerprint, merge rules, Document store, position saver, Recent list, and the page layout math.
-
-## Roadmap
-
-- **Plan 2: Highlights & Notes.** Select text and pick one of 5 colors (keys `1`–`5`), attach Notes, show a Highlight sidebar with color filter and search, re-anchor Highlights when a file changes, and Carry Over data to a changed file.
-- **Plan 3: Reader features.** Ctrl+F search, outline sidebar, dark mode with optional page inversion, password-protected PDFs, a notice for scanned PDFs without text, and a Settings screen to choose the Data Folder.
-- **Plan 4: Export & packaging.** Export a new PDF that contains Highlights and Notes (the original file is never changed), an app icon, and "Open with" registration for `.pdf` in the installer. The basic installer with a desktop shortcut already exists.
